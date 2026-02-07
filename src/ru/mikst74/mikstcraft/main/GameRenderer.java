@@ -3,6 +3,7 @@ package ru.mikst74.mikstcraft.main;
 import lombok.Setter;
 import org.joml.Matrix4f;
 import org.joml.Vector4f;
+import org.lwjgl.opengl.GL;
 import ru.mikst74.mikstcraft.model.font.Font;
 import ru.mikst74.mikstcraft.render.RenderedWorldArea;
 import ru.mikst74.mikstcraft.render.selectedvoxel.SelectedVoxelRenderer;
@@ -12,22 +13,21 @@ import ru.mikst74.mikstcraft.render.texturedquads.TexturedQuadsRenderer;
 import ru.mikst74.mikstcraft.settings.GameProperties;
 import ru.mikst74.mikstcraft.texture.TextureInfo;
 import ru.mikst74.mikstcraft.util.DelayedRunnable;
-import org.lwjgl.opengl.GL;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
-import static ru.mikst74.mikstcraft.util.BackgroundExecutor.updateAndRenderRunnables;
-import static ru.mikst74.mikstcraft.util.OpenGLErrorChecker.check;
-import static ru.mikst74.mikstcraft.util.time.Profiler.profile;
 import static org.lwjgl.glfw.GLFW.glfwMakeContextCurrent;
 import static org.lwjgl.glfw.GLFW.glfwSwapBuffers;
 import static org.lwjgl.opengl.GL11C.*;
 import static org.lwjgl.opengl.GL30C.*;
+import static ru.mikst74.mikstcraft.util.BackgroundExecutor.updateAndRenderRunnables;
+import static ru.mikst74.mikstcraft.util.time.Profiler.profile;
 
 public class GameRenderer {
+    public static boolean           RENDER_OVER_TEXTURE = false;
     private       long              lastTime;
     private final GameInstance      gameInstance;
     @Setter
@@ -89,55 +89,58 @@ public class GameRenderer {
 //            renderedWorldArea.getPosition().x+=0.4f;
             drainRunnables();
 
-            int l = 0;
 //            System.out.println("********************************");
-            glBindFramebuffer(GL_FRAMEBUFFER, windowManager.getFbo());
-            glViewport(0, 0, windowManager.getRenderWidth(), windowManager.getRenderHeight());
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            if (RENDER_OVER_TEXTURE) {
+                glBindFramebuffer(GL_FRAMEBUFFER, windowManager.getFbo());
+                glViewport(0, 0, windowManager.getRenderWidth(), windowManager.getRenderHeight());
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            }else{
+                glBindFramebuffer(GL_FRAMEBUFFER, windowManager.getFbo());
+                glViewport(0, 0, windowManager.getRenderWidth(), windowManager.getRenderHeight());
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+            }
             renderedWorldArea.createInRenderDistanceAndDestroyOutOfRenderDistanceChunks();
             renderedWorldArea.rebuildMeshForUpdatedChunks();
             if (1 == 1) {
                 profile("drawChunksWithMultiDrawElementsBaseVertex", renderedWorldArea::drawChunksWithMultiDrawElementsBaseVertex);
             }
-            check(l++);
             selectedVoxelRenderer.render();
-            check(l++);
             textAreaRenderer.addLine("pos:" + renderedWorldArea.getPosition());
             textAreaRenderer.render();
-            check(l++);
 //            profile("drawSelection", this::drawSelection);
 
+            if (RENDER_OVER_TEXTURE) {
 // Bind default framebuffer (window) and set window's viewport
-            glBindFramebuffer(GL_FRAMEBUFFER, 0);
-            glViewport(0, 0, windowManager.getWidth() * 2, windowManager.getHeight() * 2);
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                glViewport(0, 0, windowManager.getWidth() * 2, windowManager.getHeight() * 2);
 
 // Clear the window's buffers
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 // Bind the FBO's texture
-            glBindTexture(GL_TEXTURE_2D, windowManager.getRenderTextureId());
-            glEnable(GL_CULL_FACE);
-            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+                glBindTexture(GL_TEXTURE_2D, windowManager.getRenderTextureId());
+                glEnable(GL_CULL_FACE);
+                glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 // ******* DRAW A FULL-SCREEN QUAD HERE *******
 // Use a simple shader program that samples the bound texture and draws it
-            texturedQuadsRenderer.render();
-//            drawFullScreenQuadWithTexture();
+                texturedQuadsRenderer.render();
 
+                glBlitFramebuffer(0, 0, windowManager.getWidth(), windowManager.getHeight(),
+                        0, 0, windowManager.getWidth(), windowManager.getHeight(),
+                        GL_COLOR_BUFFER_BIT, GL_LINEAR);
+                glfwSwapBuffers(windowManager.getWindow());
+            } else {
 
-//            glBindFramebuffer(GL_READ_FRAMEBUFFER, windowManager.getFbo());
-//            check(l++);
-//            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-//            check(l++);
-//            glViewport(0, 0, windowManager.getWidth(), windowManager.getHeight());
-//            check(l++);
+                glBindFramebuffer(GL_READ_FRAMEBUFFER, windowManager.getFbo());
+                glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+                glViewport(0, 0, windowManager.getWidth(), windowManager.getHeight());
 //
-            glBlitFramebuffer(0, 0, windowManager.getWidth(), windowManager.getHeight(),
-                    0, 0, windowManager.getWidth(), windowManager.getHeight(),
-                    GL_COLOR_BUFFER_BIT, GL_LINEAR);
-//            check(l++);
-            glfwSwapBuffers(windowManager.getWindow());
-//            check(l++);
+                glBlitFramebuffer(0, 0, windowManager.getWidth(), windowManager.getHeight(),
+                        0, 0, windowManager.getWidth(), windowManager.getHeight(),
+                        GL_COLOR_BUFFER_BIT, GL_LINEAR);
+                glfwSwapBuffers(windowManager.getWindow());
+            }
         }
     }
 

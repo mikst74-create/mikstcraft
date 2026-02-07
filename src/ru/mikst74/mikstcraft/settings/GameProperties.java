@@ -72,11 +72,11 @@ public class GameProperties {
      * The number of chunks, starting from the player's position, that should be visible in any given
      * direction.
      */
-    public static  int MAX_RENDER_DISTANCE_CHUNKS = 3;//40;
+    public static  int MAX_RENDER_DISTANCE_CHUNKS = 6;//40;
     /**
      * Distance to the far plane.
      */
-    public static   float FAR = MAX_RENDER_DISTANCE_CHUNKS * CHUNK_SIZE *4f;//2.0f;
+    public static   float FAR = MAX_RENDER_DISTANCE_CHUNKS * CHUNK_SIZE ;//2.0f;
     /**
      * The maximum render distance in meters.
      */

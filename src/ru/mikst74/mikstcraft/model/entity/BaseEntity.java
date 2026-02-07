@@ -311,9 +311,9 @@ public class BaseEntity {
             tmpMoveVectorX.add(tmpMoveVectorZ).add(tmpMoveVectorY);
 
             moveDelta(tmpMoveVectorX);
-            if (tmpMoveVectorX.length() > 0.001) {
-                System.out.println("dt:" + dt + " tmpX:" + tmpMoveVectorX + " dirH:" + directionH);
-            }
+//            if (tmpMoveVectorX.length() > 0.001) {
+//                System.out.println("dt:" + dt + " tmpX:" + tmpMoveVectorX + " dirH:" + directionH);
+//            }
             updateIsGoing();
         }
         lastGameTick = gameTick;

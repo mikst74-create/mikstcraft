@@ -13,6 +13,7 @@ import ru.mikst74.mikstcraft.model.camera.Camera;
 import ru.mikst74.mikstcraft.render.RenderedWorldArea;
 import ru.mikst74.mikstcraft.server.GameServer;
 import ru.mikst74.mikstcraft.storage.WorldSaver;
+import ru.mikst74.mikstcraft.util.time.Profiler;
 import ru.mikst74.mikstcraft.world.WorldMap;
 import ru.mikst74.mikstcraft.world.generator.FlatTerrain3DGenerator;
 import ru.mikst74.mikstcraft.world.generator.WorldMapGenerator;
@@ -45,6 +46,7 @@ public class Starter {
     }
 
     public void createLocalGame() {
+        Profiler.start();
         createWindow();
         createInputHandlers();
 

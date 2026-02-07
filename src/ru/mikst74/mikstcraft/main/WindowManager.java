@@ -1,19 +1,17 @@
 package ru.mikst74.mikstcraft.main;
 
 import lombok.Getter;
-import ru.mikst74.mikstcraft.settings.GameDynamicProperties;
-import ru.mikst74.mikstcraft.settings.GameProperties;
-import ru.mikst74.mikstcraft.util.DelayedRunnable;
 import org.lwjgl.glfw.GLFWVidMode;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GLCapabilities;
 import org.lwjgl.system.MemoryStack;
+import ru.mikst74.mikstcraft.settings.GameDynamicProperties;
+import ru.mikst74.mikstcraft.settings.GameProperties;
+import ru.mikst74.mikstcraft.util.DelayedRunnable;
 
 import java.nio.IntBuffer;
 import java.util.Objects;
 
-import static ru.mikst74.mikstcraft.settings.OpenGLProperties.*;
-import static ru.mikst74.mikstcraft.util.BackgroundExecutor.updateAndRenderRunnables;
 import static org.lwjgl.glfw.Callbacks.glfwFreeCallbacks;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.ARBClipControl.GL_ZERO_TO_ONE;
@@ -24,19 +22,22 @@ import static org.lwjgl.opengl.GL31C.*;
 import static org.lwjgl.system.MemoryStack.stackPush;
 import static org.lwjgl.system.MemoryUtil.NULL;
 import static org.lwjgl.system.MemoryUtil.memAddress;
+import static ru.mikst74.mikstcraft.main.GameRenderer.RENDER_OVER_TEXTURE;
+import static ru.mikst74.mikstcraft.settings.OpenGLProperties.*;
+import static ru.mikst74.mikstcraft.util.BackgroundExecutor.updateAndRenderRunnables;
 
 public class WindowManager {
     public static final float WINDOW_SCALE = 0.4f;
     @Getter
-    private long window;
+    private             long  window;
     @Getter
-    private int  width;
+    private             int   width;
     @Getter
-    private int  height;
+    private             int   height;
     @Getter
-    private int  renderWidth;
+    private             int   renderWidth;
     @Getter
-    private int  renderHeight;
+    private             int   renderHeight;
 
     @Getter
     private int renderTextureId;
@@ -121,8 +122,16 @@ public class WindowManager {
         try (MemoryStack frame = stackPush()) {
             IntBuffer framebufferSize = frame.mallocInt(2);
             nglfwGetFramebufferSize(window, memAddress(framebufferSize), memAddress(framebufferSize) + 4);
-            renderWidth = framebufferSize.get(0) *2;///2;// / 4;
-            renderHeight = framebufferSize.get(1)*2;///2 ;/// 4;
+            if (RENDER_OVER_TEXTURE) {
+                renderWidth = framebufferSize.get(0) * 2;///2;// / 4;
+                renderHeight = framebufferSize.get(1) * 2;///2 ;/// 4;
+            } else {
+                renderWidth  = framebufferSize.get(0);
+                renderHeight = framebufferSize.get(1);
+                width        = framebufferSize.get(0);
+                height       = framebufferSize.get(1);
+
+            }
         }
     }
 

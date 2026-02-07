@@ -11,11 +11,13 @@ import ru.mikst74.mikstcraft.model.coo.VoxelCooIteratorXAxis;
 import ru.mikst74.mikstcraft.util.floodfill.ChunkVisibility;
 
 import java.io.Serializable;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static ru.mikst74.mikstcraft.dictionary.BlockTypeDictionary.AIR_BLOCK;
 import static ru.mikst74.mikstcraft.model.NeighborCode.*;
 import static ru.mikst74.mikstcraft.util.DebugHelper.format32BitLongAs64String;
 import static ru.mikst74.mikstcraft.util.DebugHelper.format64BitLongAs64String;
+import static ru.mikst74.mikstcraft.util.time.Profiler.profile;
 
 /**
  * Represents the voxel field of a single chunk.
@@ -232,11 +234,11 @@ public class VoxelField implements Serializable {
         //  Z => XY, для nc=ZP,ZM , U=Z, V=X, биты маски вдоль Y
 
         // Axis X
-        recalcBitMaskAxis(CooConstant.X_AXIS);
-        recalcBitMaskAxis(CooConstant.Y_AXIS);
-        recalcBitMaskAxis(CooConstant.Z_AXIS);
+        profile("recalcBitMaskAxis(CooConstant.X_AXIS)", () -> recalcBitMaskAxis(CooConstant.X_AXIS));
+        profile("recalcBitMaskAxis(CooConstant.Y_AXIS)", () -> recalcBitMaskAxis(CooConstant.Y_AXIS));
+        profile("recalcBitMaskAxis(CooConstant.Z_AXIS)", () -> recalcBitMaskAxis(CooConstant.Z_AXIS));
 
-        calcAirFlowThroughChunk();
+        profile("calcAirFlowThroughChunk()", () -> calcAirFlowThroughChunk());
 
 //        bitMasksIsOutOfDate = false;
         if (updateCallback != null) {
@@ -326,7 +328,8 @@ public class VoxelField implements Serializable {
     }
 
     private int calcFaceAoFactor(VoxelCoo c, NeighborCode ncBase) {
-        NeighborCode ncUp = null;
+        AtomicInteger currentAo = new AtomicInteger();
+        profile("calcFaceAoFactor",()-> {  NeighborCode ncUp = null;
         NeighborCode ncVp = null;
         if (ncBase == XP || ncBase == XM) {
             ncUp = ZP;
@@ -344,25 +347,25 @@ public class VoxelField implements Serializable {
         NeighborCode ncUm = ncUp.getOpposite();
         NeighborCode ncVm = ncVp.getOpposite();
 
-
-        VoxelCoo baseCoo = new VoxelCoo(c).step(ncBase);
-        VoxelCoo tmp = new VoxelCoo();
-        BlockTypeInfo btiUp = loadBTI(tmp.assign(baseCoo).step(ncUp));// loadWithNeighborTwoStep(ncBase, nc1p, c); //шаг вправо(XP), шаг вперед(ZP), взять текстуру по направлению назад(ZM)
-        BlockTypeInfo btiUm = loadBTI(tmp.assign(baseCoo).step(ncUm));//loadWithNeighborTwoStep(ncBase, nc1m, c); //
-        BlockTypeInfo btiVp = loadBTI(tmp.assign(baseCoo).step(ncVp));//loadWithNeighborTwoStep(ncBase, nc2p, c); //
-        BlockTypeInfo btiVm = loadBTI(tmp.assign(baseCoo).step(ncVm));//loadWithNeighborTwoStep(ncBase, nc2m, c); //
-        BlockTypeInfo btiUpVp = loadBTI(tmp.assign(baseCoo).step(ncUp).step(ncVp)); //loadWithNeighborThreeStep(ncBase, ncUp, ncVp, c); //
-        BlockTypeInfo btiUpVm = loadBTI(tmp.assign(baseCoo).step(ncUp).step(ncVm)); //loadWithNeighborThreeStep(ncBase, ncUp, ncVm, c); //
-        BlockTypeInfo btiUmVp = loadBTI(tmp.assign(baseCoo).step(ncUm).step(ncVp)); //loadWithNeighborThreeStep(ncBase, ncUm, ncVp, c); //
-        BlockTypeInfo btiUmVm = loadBTI(tmp.assign(baseCoo).step(ncUm).step(ncVm)); //loadWithNeighborThreeStep(ncBase, ncUm, ncVm, c); //
-        int currentAo = aoFactors(
-                btiUm.ifSolidFace(ncUp, 4) | btiUmVm.ifSolidFace(ncUp, 2) | btiVm.ifSolidFace(ncUp, 1),
-                btiUm.ifSolidFace(ncVp, 4) | btiUmVp.ifSolidFace(ncVp, 2) | btiVp.ifSolidFace(ncVp, 1),
-                btiUp.ifSolidFace(ncVm, 4) | btiUpVm.ifSolidFace(ncVm, 2) | btiVm.ifSolidFace(ncVm, 1),
-                btiUp.ifSolidFace(ncUm, 4) | btiUpVp.ifSolidFace(ncUm, 2) | btiVp.ifSolidFace(ncUm, 1)
-        );
+            VoxelCoo baseCoo = new VoxelCoo(c).step(ncBase);
+            VoxelCoo tmp = new VoxelCoo();
+            BlockTypeInfo btiUp = loadBTI(tmp.assign(baseCoo).step(ncUp));// loadWithNeighborTwoStep(ncBase, nc1p, c); //шаг вправо(XP), шаг вперед(ZP), взять текстуру по направлению назад(ZM)
+            BlockTypeInfo btiUm = loadBTI(tmp.assign(baseCoo).step(ncUm));//loadWithNeighborTwoStep(ncBase, nc1m, c); //
+            BlockTypeInfo btiVp = loadBTI(tmp.assign(baseCoo).step(ncVp));//loadWithNeighborTwoStep(ncBase, nc2p, c); //
+            BlockTypeInfo btiVm = loadBTI(tmp.assign(baseCoo).step(ncVm));//loadWithNeighborTwoStep(ncBase, nc2m, c); //
+            BlockTypeInfo btiUpVp = loadBTI(tmp.assign(baseCoo).step(ncUp).step(ncVp)); //loadWithNeighborThreeStep(ncBase, ncUp, ncVp, c); //
+            BlockTypeInfo btiUpVm = loadBTI(tmp.assign(baseCoo).step(ncUp).step(ncVm)); //loadWithNeighborThreeStep(ncBase, ncUp, ncVm, c); //
+            BlockTypeInfo btiUmVp = loadBTI(tmp.assign(baseCoo).step(ncUm).step(ncVp)); //loadWithNeighborThreeStep(ncBase, ncUm, ncVp, c); //
+            BlockTypeInfo btiUmVm = loadBTI(tmp.assign(baseCoo).step(ncUm).step(ncVm)); //loadWithNeighborThreeStep(ncBase, ncUm, ncVm, c); //
+              currentAo.set(aoFactors(
+                      btiUm.ifSolidFace(ncUp, 4) | btiUmVm.ifSolidFace(ncUp, 2) | btiVm.ifSolidFace(ncUp, 1),
+                      btiUm.ifSolidFace(ncVp, 4) | btiUmVp.ifSolidFace(ncVp, 2) | btiVp.ifSolidFace(ncVp, 1),
+                      btiUp.ifSolidFace(ncVm, 4) | btiUpVm.ifSolidFace(ncVm, 2) | btiVm.ifSolidFace(ncVm, 1),
+                      btiUp.ifSolidFace(ncUm, 4) | btiUpVp.ifSolidFace(ncUm, 2) | btiVp.ifSolidFace(ncUm, 1)
+              ));
+        });
 //        return 0xFF;
-        return currentAo;
+        return currentAo.get();
     }
 
     public void enableLoadingMode() {
