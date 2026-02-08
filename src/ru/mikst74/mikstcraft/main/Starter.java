@@ -10,12 +10,14 @@ import ru.mikst74.mikstcraft.dictionary.TextureDictionary;
 import ru.mikst74.mikstcraft.input.*;
 import ru.mikst74.mikstcraft.model.Person;
 import ru.mikst74.mikstcraft.model.camera.Camera;
+import ru.mikst74.mikstcraft.model.chunk.VoxelFieldAoFactorsMatrix;
 import ru.mikst74.mikstcraft.render.RenderedWorldArea;
 import ru.mikst74.mikstcraft.server.GameServer;
 import ru.mikst74.mikstcraft.storage.WorldSaver;
 import ru.mikst74.mikstcraft.util.time.Profiler;
 import ru.mikst74.mikstcraft.world.WorldMap;
 import ru.mikst74.mikstcraft.world.generator.FlatTerrain3DGenerator;
+import ru.mikst74.mikstcraft.world.generator.WallXTerrain3DGenerator;
 import ru.mikst74.mikstcraft.world.generator.WorldMapGenerator;
 
 import java.util.ArrayList;
@@ -32,6 +34,10 @@ import static ru.mikst74.mikstcraft.util.time.Profiler.printProfile;
 
 @Getter
 public class Starter {
+    private static final WorldMapGenerator MAP_GENERATOR =
+    new WallXTerrain3DGenerator();
+//            new FlatTerrain3DGenerator();
+    //                new NoiseTerrain3DGenerator();;
     private ThreadManager threadManager;
     public  GameInstance  gameInstance;
 
@@ -47,6 +53,7 @@ public class Starter {
 
     public void createLocalGame() {
         Profiler.start();
+        VoxelFieldAoFactorsMatrix.aoFactorMatrixCalculate();
         createWindow();
         createInputHandlers();
 
@@ -105,9 +112,8 @@ public class Starter {
 
 
     private void createWorld() {
-        WorldMapGenerator generator =
-                new FlatTerrain3DGenerator();
-//                new NoiseTerrain3DGenerator();
+        WorldMapGenerator generator = MAP_GENERATOR;
+
         WorldMap worldMap = new WorldMap(generator);
         gameInstance.setWorldMap(worldMap);
         gameInstance.setWorldSaver(new WorldSaver(worldMap));

@@ -1310,7 +1310,7 @@ public class VoxelGame2GL {
     }
 
     private static String getGlueString64BitMask(VoxelField vf, int sliceU, int sliceV) {
-        return String.format("%64s", Long.toBinaryString(vf.getGluedFaceField()[(XP.getI() << 10) + (sliceU << 5) + sliceV])).replace(' ', '0').replaceAll("..", "$0 ");
+        return String.format("%64s", Long.toBinaryString(vf.getMeshingDataField()[(XP.getI() << 10) + (sliceU << 5) + sliceV])).replace(' ', '0').replaceAll("..", "$0 ");
     }
 
     private static String getSolidString32BitMask(VoxelField vf, int sliceU, int sliceV) {

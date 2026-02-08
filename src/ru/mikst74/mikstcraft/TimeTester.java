@@ -1,18 +1,32 @@
 package ru.mikst74.mikstcraft;
 
+import ru.mikst74.mikstcraft.dictionary.BlockTypeDictionary;
 import ru.mikst74.mikstcraft.model.chunk.VoxelField;
+import ru.mikst74.mikstcraft.model.chunk.VoxelFieldAoFactorsMatrix;
 import ru.mikst74.mikstcraft.model.coo.VoxelCoo;
-import ru.mikst74.mikstcraft.util.generation.FloodFill3D;
 import ru.mikst74.mikstcraft.util.floodfill.ChunkVisibility;
 import ru.mikst74.mikstcraft.util.floodfill.VoxelConnectivity;
+import ru.mikst74.mikstcraft.util.generation.FloodFill3D;
 
 import static ru.mikst74.mikstcraft.dictionary.BlockTypeDictionary.DEFAULT_BLOCK;
+import static ru.mikst74.mikstcraft.model.coo.CooConstant.*;
+import static ru.mikst74.mikstcraft.model.coo.CooConstant.Z_AXIS;
 import static ru.mikst74.mikstcraft.util.time.Profiler.*;
 
 public class TimeTester {
     public static void main(String[] args) throws Exception {
-//        voxelRecalcAllBitMaskTest();
-        floodFillTest();
+        VoxelFieldAoFactorsMatrix.aoFactorMatrixCalculate();
+
+        voxelRecalcAllBitMaskTest();
+//        floodFillTest();
+
+//        for (int i = 0; i < 16; i++) {
+//            int n = ((i & 0x0C) >> 1) | i & 3;
+//            System.out.println(i + "\t:"+ n + "\t:" + ((n & 1) == 1 && (n & 4) == 4 ? 0 : 3 - Integer.bitCount(n)));
+////            System.out.println(i + "\t:"+ n + "\t:" + transform2(i));
+//            System.out.println(i + "\t:"+ n + "\t:" + ExtMath.aoFactor4bitTo2bitTransform(i));
+//            System.out.println("*********************");
+//        }
     }
 
     private static void floodFillTest() {
@@ -23,7 +37,7 @@ public class TimeTester {
 
 //                    c[x][y][z] = z == 1 && x == 1 ? 0 : 7;
 //                    c[x][y][z] = 7; // all solid block
-                     c[x][y][z] = 0; // all air block
+                    c[x][y][z] = 0; // all air block
 //                    c[x][y][z] = (x == 10 || y == 10 || z == 10) ? 7 : 0;
 
                 }
@@ -45,6 +59,7 @@ public class TimeTester {
     }
 
     private static void voxelRecalcAllBitMaskTest() {
+        BlockTypeDictionary.getInstance().init();
         VoxelField vf = new VoxelField();
         VoxelCoo c = new VoxelCoo();
 
@@ -54,11 +69,11 @@ public class TimeTester {
                 while (c.iterateZ()) {
                     if (
                         //Chess
-//                            (c.getX() & 1) == 0 &&
-//                                    (c.getY() & 1) == 0 &&
-//                                    (c.getZ() & 1) == 0
+                            (c.getX() & 1) == 0 &&
+                                    (c.getY() & 1) == 0 &&
+                                    (c.getZ() & 1) == 0
 
-                            (c.getX() >= c.getY() && c.getZ() >= c.getY())
+//                            (c.getX() >= c.getY() && c.getZ() >= c.getY())
                     ) {
                         vf.store(c, DEFAULT_BLOCK);
                     }
@@ -68,10 +83,27 @@ public class TimeTester {
         start();
         profile("test", () -> {
             for (int i = 0; i < 10000; i++) {
-                vf.recalcAllBitMask();
+             vf.  recalcSolidAndGlueTextureBitMaskAxis(X_AXIS);
+             vf.  recalcSolidAndGlueTextureBitMaskAxis(Y_AXIS);
+             vf.  recalcSolidAndGlueTextureBitMaskAxis(Z_AXIS);
+             vf.  recalcGlueFacesBitMaskAxis(X_AXIS);
+             vf.  recalcGlueFacesBitMaskAxis(Y_AXIS);
+             vf.  recalcGlueFacesBitMaskAxis(Z_AXIS);
+             vf.  recalcVoxelsAoFactors();
+             vf.  recalcAoEqualsBitMaskAxis(X_AXIS);
+             vf.  recalcAoEqualsBitMaskAxis(Y_AXIS);
+             vf.  recalcAoEqualsBitMaskAxis(Z_AXIS);
+             vf.  recalcMeshData(X_AXIS);
+             vf.  recalcMeshData(Y_AXIS);
+             vf.  recalcMeshData(Z_AXIS);
             }
         });
 
         printProfile();
     }
+
+
+    //
+
+
 }

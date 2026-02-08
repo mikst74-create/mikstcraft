@@ -13,6 +13,7 @@ import ru.mikst74.mikstcraft.model.item.BaseItem;
 import ru.mikst74.mikstcraft.model.item.BlockItem;
 import ru.mikst74.mikstcraft.settings.GameProperties;
 
+import static ru.mikst74.mikstcraft.dictionary.BlockTypeDictionary.AIR_BLOCK;
 import static ru.mikst74.mikstcraft.server.message.BlockServerMessage.createSetBlockMessage;
 import static ru.mikst74.mikstcraft.settings.GameProperties.PLAYER_EYE_HEIGHT;
 
@@ -45,7 +46,7 @@ public class Person extends BaseEntity {
         normalSpeed = 4.0f;
         afterMove();
         afterRotate();
-        primaryItem = ItemDictionary.getInstance().getAllItems().get(2);
+        primaryItem = ItemDictionary.getInstance().getAllItems().get(5);
     }
 
     @Override
@@ -69,7 +70,8 @@ public class Person extends BaseEntity {
     public void doAttack(InputEventData inputEventData) {
         SelectedVoxel selectedVoxel = selectionDetector.getSelectedVoxel();
         if (selectedVoxel.isHasSelection()) {
-            
+            communicationManager.sendMessage(createSetBlockMessage(selectedVoxel.getCoo(), AIR_BLOCK));
+
         }
     }
 

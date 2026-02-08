@@ -17,11 +17,11 @@ import static ru.mikst74.mikstcraft.model.coo.VoxelCoo.MAX_VOXEL_COO;
 public class GreedyMeshing3 {
 
 
-//    public static final long SIEVE_MASK = 0x5555555555555555L;
+    //    public static final long SIEVE_MASK = 0x5555555555555555L;
     public static final int SIEVE_MASK = 0x55555555;
 
-    private Chunk  chunk;
-    private int[]  count;
+    private Chunk chunk;
+    private int[] count;
     private int[] gluedFaceField;
 
 
@@ -148,7 +148,7 @@ public class GreedyMeshing3 {
             }
             faces.consume(meshCoo.getY(), meshCoo.getZ(),
                     meshCoo.getY() + h, meshCoo.getZ() + w,
-                    meshCoo.getX() + nc.getP(), nc, textureId);
+                    meshCoo.getX() + nc.getP(), nc, textureId + 0);
             count[nc.getI()]++;
             meshCoo.addZ(w);
         }

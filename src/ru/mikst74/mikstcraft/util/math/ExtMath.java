@@ -58,4 +58,39 @@ public class ExtMath {
     }
 
 
+    /**
+     * Transform 4bit AO factors to 2bit value for greedyMeshing
+     * transform matrix
+     *     0000   => 3
+     *     0001   => 2
+     *     0010   => 2
+     *     0011   => 1
+     *     0100   => 2
+     *     0101   => 1
+     *     0110   => 2
+     *     0111   => 1
+     *     1000   => 2
+     *     1001   => 0
+     *     1010   => 1
+     *     1011   => 0
+     *     1100   => 1
+     *     1101   => 0
+     *     1110   => 1
+     *     1111   => 0
+     * @param x
+     * @return
+     */
+        public static int aoFactor4bitTo2bitTransform(int x) {
+
+            // This constant holds all 16 results (2 bits each)
+            // 0x1112666B represents the specific sequence provided in your table
+            int magic = 0x1112666B;
+
+            // Step-by-step:
+            // 1. (x & 0xF) ensures we only look at the last 4 bits. (no needed in real code)
+            // 2. << 1 multiplies by 2 to find the bit offset.
+            // 3. >> shifts the target 2-bit result to the front.
+            // 4. & 3 extracts those 2 bits.
+            return (magic >> ((x /* & 0xF*/) << 1)) & 3;
+        }
 }

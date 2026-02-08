@@ -4,9 +4,6 @@ import lombok.Getter;
 import ru.mikst74.mikstcraft.model.NeighborCode;
 
 import static ru.mikst74.mikstcraft.model.NeighborCode.*;
-import static ru.mikst74.mikstcraft.model.NeighborCode.YP;
-import static ru.mikst74.mikstcraft.model.NeighborCode.ZM;
-import static ru.mikst74.mikstcraft.model.NeighborCode.ZP;
 
 @Getter
 public class VoxelCoo extends GridCoo<VoxelCoo> {
@@ -101,6 +98,19 @@ public class VoxelCoo extends GridCoo<VoxelCoo> {
         throw new RuntimeException("unknown axis " + axis);
     }
 
+    public boolean iterate(int axis, int min, int max) {
+        if (axis == CooConstant.X_AXIS) {
+            return iterateX(min, max);
+        }
+        if (axis == CooConstant.Y_AXIS) {
+            return iterateY(min, max);
+        }
+        if (axis == CooConstant.Z_AXIS) {
+            return iterateZ(min, max);
+        }
+        throw new RuntimeException("unknown axis " + axis);
+    }
+
     public boolean iterateX() {
         if (!iteratorX) {
             x         = 0;
@@ -110,6 +120,20 @@ public class VoxelCoo extends GridCoo<VoxelCoo> {
             if ((x & sideMax) == 0) {
                 iteratorX = false;
                 x         = 0;
+            }
+        }
+        return iteratorX;
+    }
+
+    public boolean iterateX(int min, int max) {
+        if (!iteratorX) {
+            x         = min;
+            iteratorX = true;
+        } else {
+            incX();
+            if (x > max) {
+                iteratorX = false;
+                x         = min;
             }
         }
         return iteratorX;
@@ -129,6 +153,20 @@ public class VoxelCoo extends GridCoo<VoxelCoo> {
         return iteratorY;
     }
 
+    public boolean iterateY(int min, int max) {
+        if (!iteratorY) {
+            y         = min;
+            iteratorY = true;
+        } else {
+            incY();
+            if (y > max) {
+                iteratorY = false;
+                y         = min;
+            }
+        }
+        return iteratorY;
+    }
+
     public boolean iterateZ() {
         if (!iteratorZ) {
             z         = 0;
@@ -138,6 +176,20 @@ public class VoxelCoo extends GridCoo<VoxelCoo> {
             if ((z & sideMax) == 0) {
                 iteratorZ = false;
                 z         = 0;
+            }
+        }
+        return iteratorZ;
+    }
+
+    public boolean iterateZ(int min, int max) {
+        if (!iteratorZ) {
+            z         = min;
+            iteratorZ = true;
+        } else {
+            incZ();
+            if (z > max) {
+                iteratorZ = false;
+                z         = min;
             }
         }
         return iteratorZ;
@@ -183,6 +235,10 @@ public class VoxelCoo extends GridCoo<VoxelCoo> {
                                                         z == sideMax ? ZP :
                                                                 null;
 
+    }
+
+    public boolean isInnerChunk() {
+        return x >= 0 && y >= 0 && z >= 0 && x <= sideMax && y <= sideMax && z <= sideMax;
     }
 }
 

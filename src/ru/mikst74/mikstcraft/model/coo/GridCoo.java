@@ -120,16 +120,20 @@ public abstract class GridCoo<T extends GridCoo<T>> {
     }
 
     public int get(int axis) {
-        if (axis == CooConstant.X_AXIS) {
-            return getX();
-        }
-        if (axis == CooConstant.Y_AXIS) {
-            return getY();
-        }
-        if (axis == CooConstant.Z_AXIS) {
-            return getZ();
-        }
-        throw new RuntimeException("unknown axis " + axis);
+        return
+                axis == CooConstant.X_AXIS ? getX() :
+                        axis == CooConstant.Y_AXIS ? getY() : getZ();
+
+//        if (axis == CooConstant.X_AXIS) {
+//            return getX();
+//        }
+//        if (axis == CooConstant.Y_AXIS) {
+//            return getY();
+//        }
+//        if (axis == CooConstant.Z_AXIS) {
+//            return getZ();
+//        }
+//        throw new RuntimeException("unknown axis " + axis);
     }
 
     public T set(int axis, int d) {

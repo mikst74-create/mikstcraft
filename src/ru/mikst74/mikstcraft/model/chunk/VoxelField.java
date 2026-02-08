@@ -5,7 +5,6 @@ import lombok.Setter;
 import ru.mikst74.mikstcraft.dictionary.BlockTypeDictionary;
 import ru.mikst74.mikstcraft.dictionary.BlockTypeInfo;
 import ru.mikst74.mikstcraft.model.NeighborCode;
-import ru.mikst74.mikstcraft.model.coo.CooConstant;
 import ru.mikst74.mikstcraft.model.coo.VoxelCoo;
 import ru.mikst74.mikstcraft.model.coo.VoxelCooIteratorXAxis;
 import ru.mikst74.mikstcraft.util.floodfill.ChunkVisibility;
@@ -15,8 +14,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static ru.mikst74.mikstcraft.dictionary.BlockTypeDictionary.AIR_BLOCK;
 import static ru.mikst74.mikstcraft.model.NeighborCode.*;
+import static ru.mikst74.mikstcraft.model.chunk.VoxelFieldAoFactorsMatrix.AO_FACTOR_MATRIX;
+import static ru.mikst74.mikstcraft.model.coo.CooConstant.*;
 import static ru.mikst74.mikstcraft.util.DebugHelper.format32BitLongAs64String;
 import static ru.mikst74.mikstcraft.util.DebugHelper.format64BitLongAs64String;
+import static ru.mikst74.mikstcraft.util.math.ExtMath.doubleBits;
 import static ru.mikst74.mikstcraft.util.time.Profiler.profile;
 
 /**
@@ -27,6 +29,9 @@ import static ru.mikst74.mikstcraft.util.time.Profiler.profile;
  */
 @Getter
 public class VoxelField implements Serializable {
+    public static final int VISIBLE_SIEVE_MASK = 0x55555555;
+    public static final int EQUALS_SIEVE_MASK  = ~VISIBLE_SIEVE_MASK;
+
     /**
      * Size of VoxelField object
      * 0. VoxelField headers: 56 bytes
@@ -37,18 +42,19 @@ public class VoxelField implements Serializable {
      * total: 26456 bytes. Can be 14792 (if make field as short[])
      */
     //
-    public static final int FIELD_ARRAY_SIZE   = (1 + 16 + 1) * (1 + 16 + 1) * (1 + 16 + 1); // Размер чанка 16х16х16 + 1 с каждой стороны для копирования данных соседнего чанка
-    public static final int FIELD0_ARRAY_SIZE  = 16 * 16 * 16; // Размер чанка 16х16х16 + 1 с каждой стороны для копирования данных соседнего чанка
+    public static final int FIELD_ARRAY_SIZE         = (1 + 16 + 1) * (1 + 16 + 1) * (1 + 16 + 1); // Размер чанка 16х16х16 + 1 с каждой стороны для копирования данных соседнего чанка
+    public static final int FIELD0_ARRAY_SIZE        = 16 * 16 * 16; // Размер чанка 16х16х16 + 1 с каждой стороны для копирования данных соседнего чанка
     // 6*16*16=1536 bytes
-    public static final int BITMASK_ARRAY_SIZE = 6 * 16 * 16;
+    public static final int SOLID_BITMASK_ARRAY_SIZE = 6 * 18 * 18;
+    public static final int MESH_DATA_ARRAY_SIZE     = 6 * 16 * 16;
 
     /**
      * Порядок обхода слоев для расчета битовых масок
      * значение для массива - номер оси
      */
-    public static final int[]          U = {CooConstant.X_AXIS, CooConstant.Y_AXIS, CooConstant.Z_AXIS};
-    public static final int[]          V = {CooConstant.Y_AXIS, CooConstant.Z_AXIS, CooConstant.X_AXIS};
-    public static final int[]          A = {CooConstant.Z_AXIS, CooConstant.X_AXIS, CooConstant.Y_AXIS};
+    public static final int[]          U = {X_AXIS, Y_AXIS, Z_AXIS};
+    public static final int[]          V = {Y_AXIS, Z_AXIS, X_AXIS};
+    public static final int[]          A = {Z_AXIS, X_AXIS, Y_AXIS};
     public static final NeighborCode[] N = {XP, YP, ZP};
     /**
      * The actual voxel field as a flat array.
@@ -82,8 +88,26 @@ public class VoxelField implements Serializable {
      * 1 bit per face.
      * 0 - face is not solid (= no face)
      * 1- face is solid,
+     * <p>
+     * Для вокселей текущего чанка используются байты 1 и 2. Старший бит 0 байта и младший бит 3 байта - маска по данным вокселей соседних чанков
      */
     private transient final int[] solidFaceField;
+    /**
+     * 0 - face is glued, not visible
+     * 1 - face is open, visible
+     *
+     */
+    private transient final int[] visibleFaceField;
+    /**
+     * 0 - current and next voxel have different texture
+     * 1 - current and next voxel have equal texture
+     */
+    private transient final int[] textureEqualsWithNextFaceField;
+    /**
+     * 0 - current and next voxel have different aoFactor
+     * 1 - current and next voxel have equal aoFactor
+     */
+    private transient final int[] aoEqualsWithNextFaceField;
 
     /**
      * "visibility" or "transparency" through chuck for raytrace. Use for occlusing whole chuck
@@ -121,7 +145,7 @@ public class VoxelField implements Serializable {
      * 11 - need draw, next face has the same texture
      * 10 - no face generate need, but has the same texture (for example, a cut-out stair block)
      */
-    private transient final int[] gluedFaceField;
+    private transient final int[] meshingDataField;
 
     private transient boolean  isLoadingMode;
     @Setter
@@ -137,21 +161,28 @@ public class VoxelField implements Serializable {
      */
 //    public int num;
     public VoxelField() {
-        this.field               = new short[FIELD_ARRAY_SIZE];
-        this.solidFaceField      = new int[BITMASK_ARRAY_SIZE];
-        this.gluedFaceField      = new int[BITMASK_ARRAY_SIZE];
-        this.aoFactorFaceField   = new byte[6 * FIELD0_ARRAY_SIZE];
+        this.field                          = new short[FIELD_ARRAY_SIZE];
+        this.solidFaceField                 = new int[SOLID_BITMASK_ARRAY_SIZE];
+        this.visibleFaceField               = new int[SOLID_BITMASK_ARRAY_SIZE];
+        this.textureEqualsWithNextFaceField = new int[SOLID_BITMASK_ARRAY_SIZE];
+        this.aoEqualsWithNextFaceField      = new int[SOLID_BITMASK_ARRAY_SIZE];
+        this.meshingDataField               = new int[MESH_DATA_ARRAY_SIZE];
+        this.aoFactorFaceField              = new byte[6 * FIELD0_ARRAY_SIZE];
+//        for (int i = 0; i < 6 * FIELD0_ARRAY_SIZE; i++) {
+//            aoFactorFaceField[i] = (byte) 0xff;
+//        }
+
         this.airFlowThroughChunk = new ChunkVisibility.VisibilityResult();
         this.solidBlockCount     = 0;
     }
 
 
     public int[] getCopyOfGluedFaceField() {
-        int[] res = new int[BITMASK_ARRAY_SIZE];
+        int[] res = new int[MESH_DATA_ARRAY_SIZE];
 //        if (bitMasksIsOutOfDate) {
         recalcAllBitMask();
 //        }
-        System.arraycopy(gluedFaceField, 0, res, 0, BITMASK_ARRAY_SIZE);
+        System.arraycopy(meshingDataField, 0, res, 0, MESH_DATA_ARRAY_SIZE);
         return res;
     }
 
@@ -205,7 +236,11 @@ public class VoxelField implements Serializable {
     }
 
     public BlockTypeInfo loadBTI(VoxelCoo coo) {
-        BlockTypeInfo blockTypeInfo = BlockTypeDictionary.getBlockTypeInfo(field[coo.idx()]);
+        short id = field[coo.idx()];
+        if (id == 0) {
+            return AIR_BLOCK;
+        }
+        BlockTypeInfo blockTypeInfo = BlockTypeDictionary.getBlockTypeInfo(id);
         return blockTypeInfo == null ? AIR_BLOCK : blockTypeInfo;
     }
 
@@ -234,10 +269,19 @@ public class VoxelField implements Serializable {
         //  Z => XY, для nc=ZP,ZM , U=Z, V=X, биты маски вдоль Y
 
         // Axis X
-        profile("recalcBitMaskAxis(CooConstant.X_AXIS)", () -> recalcBitMaskAxis(CooConstant.X_AXIS));
-        profile("recalcBitMaskAxis(CooConstant.Y_AXIS)", () -> recalcBitMaskAxis(CooConstant.Y_AXIS));
-        profile("recalcBitMaskAxis(CooConstant.Z_AXIS)", () -> recalcBitMaskAxis(CooConstant.Z_AXIS));
-
+        recalcSolidAndGlueTextureBitMaskAxis(X_AXIS);
+        recalcSolidAndGlueTextureBitMaskAxis(Y_AXIS);
+        recalcSolidAndGlueTextureBitMaskAxis(Z_AXIS);
+        recalcGlueFacesBitMaskAxis(X_AXIS);
+        recalcGlueFacesBitMaskAxis(Y_AXIS);
+        recalcGlueFacesBitMaskAxis(Z_AXIS);
+        recalcVoxelsAoFactors();
+        recalcAoEqualsBitMaskAxis(X_AXIS);
+        recalcAoEqualsBitMaskAxis(Y_AXIS);
+        recalcAoEqualsBitMaskAxis(Z_AXIS);
+        recalcMeshData(X_AXIS);
+        recalcMeshData(Y_AXIS);
+        recalcMeshData(Z_AXIS);
         profile("calcAirFlowThroughChunk()", () -> calcAirFlowThroughChunk());
 
 //        bitMasksIsOutOfDate = false;
@@ -246,7 +290,80 @@ public class VoxelField implements Serializable {
         }
     }
 
-    private void recalcBitMaskAxis(int axis) {
+    public void recalcAoEqualsBitMaskAxis(int axis) {
+        VoxelCoo c = new VoxelCoo();
+        VoxelCoo cF = new VoxelCoo(); // one step forward from c
+        final int ITERATE_AXIS_U = U[axis];
+        final int ITERATE_AXIS_V = V[axis];
+        final int ALONG_AXIS = A[axis];
+        NeighborCode ncRight = N[axis];
+        NeighborCode ncLeft = ncRight.getOpposite();
+        int aoMaskR;
+        int aoMaskL;
+        int aoBitValue;
+        int currentAoR;
+        int currentAoL;
+        int nextAoR;
+        int nextAoL;
+        int aoCooIndex;
+        int aoSliceRIndex;
+        int aoSliceLIndex;
+        while (c.iterate(ITERATE_AXIS_U)) {
+            while (c.iterate(ITERATE_AXIS_V)) {
+                currentAoR = aoFactorFaceField[(ncRight.getI() << 12) + c.idx0()];
+                currentAoL = aoFactorFaceField[(ncLeft.getI() << 12) + c.idx0()];
+                nextAoR    = 0;
+                nextAoL    = 0;
+                aoMaskR    = 0;
+                aoMaskL    = 0;
+                aoBitValue = 1 << 7;
+                int aoAxisUindex = (c.get(ITERATE_AXIS_U) + 1) * 18;
+
+                while (c.iterate(ALONG_AXIS)) {
+                    cF.assign(c).inc(ALONG_AXIS);
+                    if (cF.get(ALONG_AXIS) < 15) {
+                        nextAoR = aoFactorFaceField[(ncRight.getI() << 12) + cF.idx0()];
+                        nextAoL = aoFactorFaceField[(ncLeft.getI() << 12) + cF.idx0()];
+                    }
+                    aoMaskR |= currentAoR == nextAoR ? aoBitValue : 0;
+                    aoMaskL |= currentAoL == nextAoL ? aoBitValue : 0;
+
+
+                    aoBitValue <<= 1;
+                }
+                aoCooIndex                               = aoAxisUindex + (c.get(ITERATE_AXIS_V) + 1);
+                aoSliceRIndex                            = (ncRight.getI() * 324) + aoCooIndex;
+                aoSliceLIndex                            = (ncLeft.getI() * 324) + aoCooIndex;
+                aoEqualsWithNextFaceField[aoSliceRIndex] = aoMaskR;
+                aoEqualsWithNextFaceField[aoSliceLIndex] = aoMaskL;
+            }
+        }
+    }
+
+    public void recalcMeshData(int axis) {
+        VoxelCoo c = new VoxelCoo();
+        final int ITERATE_AXIS_U = U[axis];
+        final int ITERATE_AXIS_V = V[axis];
+        final int ALONG_AXIS = A[axis];
+        NeighborCode ncRight = N[axis];
+        NeighborCode ncLeft = ncRight.getOpposite();
+        while (c.iterate(ITERATE_AXIS_U)) {
+            while (c.iterate(ITERATE_AXIS_V)) {
+                int meshIndex = (c.get(ITERATE_AXIS_U) << 4) | c.get(ITERATE_AXIS_V);
+                int sliceUVIndex = (c.get(ITERATE_AXIS_U) + 1) * 18 + (c.get(ITERATE_AXIS_V) + 1);
+                int sliceRIndex = (ncRight.getI() * 324) + sliceUVIndex;
+                int sliceLIndex = (ncLeft.getI() * 324) + sliceUVIndex;
+                int visibleMaskR = (int) doubleBits((visibleFaceField[sliceRIndex] >>> 8) & 0xFFFF);
+                int visibleMaskL = (int) doubleBits((visibleFaceField[sliceLIndex] >>> 8) & 0xFFFF);
+                int equalsMaskR = (int) doubleBits(((textureEqualsWithNextFaceField[sliceRIndex] & aoEqualsWithNextFaceField[sliceRIndex]) >>> 8) & 0xFFFF);
+                int equalsMaskL = (int) doubleBits(((textureEqualsWithNextFaceField[sliceLIndex] & aoEqualsWithNextFaceField[sliceLIndex]) >>> 8) & 0xFFFF);
+                meshingDataField[(ncRight.getI() << 8) | meshIndex] = (visibleMaskR & VISIBLE_SIEVE_MASK) | (equalsMaskR & EQUALS_SIEVE_MASK);
+                meshingDataField[(ncLeft.getI() << 8) | meshIndex]  = (visibleMaskL & VISIBLE_SIEVE_MASK) | (equalsMaskL & EQUALS_SIEVE_MASK);
+            }
+        }
+    }
+
+    public void recalcBitMaskAxis(int axis) {
         //  X => YZ, для nc=XP,XM , U=X, V=Y, биты маски вдоль Z
         /**
          */
@@ -318,34 +435,161 @@ public class VoxelField implements Serializable {
                 int cooIndex = (c.get(ITERATE_AXIS_U) << 4) + c.get(ITERATE_AXIS_V);
                 int slicePIndex = (ncRight.getI() << 8) + cooIndex;
                 int sliceMIndex = (ncLeft.getI() << 8) + cooIndex;
-                solidFaceField[slicePIndex] = solidBitMaskP;
-                solidFaceField[sliceMIndex] = solidBitMaskM;
-                gluedFaceField[slicePIndex] = glueBitMaskP;
-                gluedFaceField[sliceMIndex] = glueBitMaskM;
+                solidFaceField[slicePIndex]   = solidBitMaskP;
+                solidFaceField[sliceMIndex]   = solidBitMaskM;
+                visibleFaceField[slicePIndex] = glueBitMaskP;
+                visibleFaceField[sliceMIndex] = glueBitMaskM;
 
+            }
+        }
+    }
+
+    public void recalcSolidAndGlueTextureBitMaskAxis(int axis) {
+        //  X => YZ, для nc=XP,XM , U=X, V=Y, биты маски вдоль Z
+        /**
+         */
+
+        VoxelCoo c = new VoxelCoo();
+        VoxelCoo cF = new VoxelCoo(); // one step right from c
+        NeighborCode ncRight = N[axis];
+        NeighborCode ncLeft = ncRight.getOpposite();
+        final int ITERATE_AXIS_U = U[axis];
+        final int ITERATE_AXIS_V = V[axis];
+        final int ALONG_AXIS = A[axis];
+        BlockTypeInfo currentVoxel;
+        BlockTypeInfo nextVoxel = null;
+
+        int solidCooIndex;
+        int solidSliceRIndex;
+        int solidSliceLIndex;
+        int solidBitMaskR;
+        int solidBitMaskL;
+        int textureMaskR;
+        int textureMaskL;
+        int solidBitValue;
+        int solidFaceR;
+        int solidFaceL;
+        boolean lastInRow;
+        while (c.iterate(ITERATE_AXIS_U, -1, 16)) {
+            int solidAxisUindex = (c.get(ITERATE_AXIS_U) + 1) * 18;
+            while (c.iterate(ITERATE_AXIS_V, -1, 16)) {
+                solidBitMaskR = 0;
+                solidBitMaskL = 0;
+                textureMaskR  = 0;
+                textureMaskL  = 0;
+                solidBitValue = 1 << 7;
+
+                c.set(ALONG_AXIS, -1);
+                cF.assign(c);
+                currentVoxel = loadBTI(c);
+                while (c.iterate(ALONG_AXIS, -1, 16)) {
+                    cF.inc(ALONG_AXIS);
+                    lastInRow  = c.get(ALONG_AXIS) == 16;
+                    nextVoxel  = !lastInRow ? loadBTI(cF) : nextVoxel;
+                    solidFaceR = currentVoxel.ifSolidFace(ncRight, solidBitValue);
+                    solidBitMaskR |= solidFaceR;
+                    solidFaceL = currentVoxel.ifSolidFace(ncLeft, solidBitValue);
+                    solidBitMaskL |= solidFaceL;
+
+                    /**
+                     * calculate glue-texture bit (hi bit of two bit mask per voxel) for current voxel, right and left faces
+                     */
+                    textureMaskR |= currentVoxel == nextVoxel ? solidBitValue : 0;
+                    textureMaskL |= currentVoxel == nextVoxel ? solidBitValue : 0;
+
+                    solidBitValue <<= 1;
+
+                    currentVoxel = nextVoxel;
+                }
+                solidCooIndex                                    = solidAxisUindex + (c.get(ITERATE_AXIS_V) + 1);
+                solidSliceRIndex                                 = (ncRight.getI() * 324) + solidCooIndex;
+                solidSliceLIndex                                 = (ncLeft.getI() * 324) + solidCooIndex;
+                solidFaceField[solidSliceRIndex]                 = solidBitMaskR;
+                solidFaceField[solidSliceLIndex]                 = solidBitMaskL;
+                textureEqualsWithNextFaceField[solidSliceRIndex] = textureMaskR;
+                textureEqualsWithNextFaceField[solidSliceLIndex] = textureMaskL;
+//                c.set(ALONG_AXIS, 0);
+//                if (c.isInnerChunk()) {
+//                    meshingDataField[(ncRight.getI() << 8) + (c.get(ITERATE_AXIS_U) << 4) + c.get(ITERATE_AXIS_V)] = textureMaskR;// | (((int) doubleBits((solidBitMaskR >> 8) & 0xFFFF)) & 0x55555555);
+//                    meshingDataField[(ncLeft.getI() << 8) + (c.get(ITERATE_AXIS_U) << 4) + c.get(ITERATE_AXIS_V)]  = textureMaskL;// | (((int) doubleBits((solidBitMaskL >> 8) & 0xFFFF)) & 0x55555555);
+//                }
+            }
+        }
+    }
+
+    public void recalcGlueFacesBitMaskAxis(int axis) {
+        //  X => YZ, для nc=XP,XM , U=X, V=Y, биты маски вдоль Z
+        /**
+         */
+
+        VoxelCoo c = new VoxelCoo();
+        VoxelCoo cR = new VoxelCoo(); // one step right from c
+        VoxelCoo cL = new VoxelCoo(); // one step left from c
+        NeighborCode ncRight = N[axis];
+        NeighborCode ncLeft = ncRight.getOpposite();
+        final int ITERATE_AXIS_U = U[axis];
+        final int ITERATE_AXIS_V = V[axis];
+        int solidSliceRIndex;
+        int solidSliceROIndex;
+        int solidSliceLIndex;
+        int solidSliceLOIndex;
+        while (c.iterate(ITERATE_AXIS_U)) {
+            while (c.iterate(ITERATE_AXIS_V)) {
+                cR.assign(c).inc(ITERATE_AXIS_U);
+                cL.assign(c).dec(ITERATE_AXIS_U);
+                solidSliceRIndex  = (ncRight.getI() * 324) + (c.get(ITERATE_AXIS_U) + 1) * 18 + (c.get(ITERATE_AXIS_V) + 1);
+                solidSliceROIndex = (ncLeft.getI() * 324) + (cR.get(ITERATE_AXIS_U) + 1) * 18 + (cR.get(ITERATE_AXIS_V) + 1);
+                solidSliceLIndex  = (ncLeft.getI() * 324) + (c.get(ITERATE_AXIS_U) + 1) * 18 + (c.get(ITERATE_AXIS_V) + 1);
+                solidSliceLOIndex = (ncRight.getI() * 324) + (cL.get(ITERATE_AXIS_U) + 1) * 18 + (cL.get(ITERATE_AXIS_V) + 1);
+
+                visibleFaceField[solidSliceRIndex] = solidFaceField[solidSliceRIndex] & ~solidFaceField[solidSliceROIndex];
+                visibleFaceField[solidSliceLIndex] = solidFaceField[solidSliceLIndex] & ~solidFaceField[solidSliceLOIndex];
+//                meshingDataField[(ncRight.getI() << 8) + (c.get(ITERATE_AXIS_U) << 4) + c.get(ITERATE_AXIS_V)] |= ((int) doubleBits((solidFaceField[solidSliceRIndex] & ~solidFaceField[solidSliceROIndex]) >>> 8)) & 0x55555555;
+//                meshingDataField[(ncLeft.getI() << 8) + (c.get(ITERATE_AXIS_U) << 4) + c.get(ITERATE_AXIS_V)] |= ((int) doubleBits((solidFaceField[solidSliceLIndex] & ~solidFaceField[solidSliceLOIndex]) >>> 8)) & 0x55555555;
+            }
+        }
+    }
+
+    public void recalcVoxelsAoFactors() {
+        //  X => YZ, для nc=XP,XM , U=X, V=Y, биты маски вдоль Z
+        /**
+         */
+
+        VoxelCoo c = new VoxelCoo();
+
+        while (c.iterateX()) {
+            while (c.iterateY()) {
+                while (c.iterateZ()) {
+                    if (loadBTI(c) == AIR_BLOCK) {
+                        continue;
+                    }
+                    forEachNeighborCode(nc -> aoFactorFaceField[(nc.getI() << 12) + c.idx0()] = (byte) calcFaceAoFactor2(c, nc));
+//                    aoFactorFaceField[(XP.getI() << 12) + c.idx0()] = (byte) calcFaceAoFactor2(c, XP);
+                }
             }
         }
     }
 
     private int calcFaceAoFactor(VoxelCoo c, NeighborCode ncBase) {
         AtomicInteger currentAo = new AtomicInteger();
-        profile("calcFaceAoFactor",()-> {  NeighborCode ncUp = null;
-        NeighborCode ncVp = null;
-        if (ncBase == XP || ncBase == XM) {
-            ncUp = ZP;
-            ncVp = YP;
-        }
-        if (ncBase == YP || ncBase == YM) {
-            ncUp = XP;
-            ncVp = ZP;
-        }
-        if (ncBase == ZP || ncBase == ZM) {
-            ncUp = YP;
-            ncVp = XP;
-        }
-        assert ncUp != null;
-        NeighborCode ncUm = ncUp.getOpposite();
-        NeighborCode ncVm = ncVp.getOpposite();
+        profile("calcFaceAoFactor", () -> {
+            NeighborCode ncUp = null;
+            NeighborCode ncVp = null;
+            if (ncBase == XP || ncBase == XM) {
+                ncUp = ZP;
+                ncVp = YP;
+            }
+            if (ncBase == YP || ncBase == YM) {
+                ncUp = XP;
+                ncVp = ZP;
+            }
+            if (ncBase == ZP || ncBase == ZM) {
+                ncUp = YP;
+                ncVp = XP;
+            }
+            assert ncUp != null;
+            NeighborCode ncUm = ncUp.getOpposite();
+            NeighborCode ncVm = ncVp.getOpposite();
 
             VoxelCoo baseCoo = new VoxelCoo(c).step(ncBase);
             VoxelCoo tmp = new VoxelCoo();
@@ -357,15 +601,94 @@ public class VoxelField implements Serializable {
             BlockTypeInfo btiUpVm = loadBTI(tmp.assign(baseCoo).step(ncUp).step(ncVm)); //loadWithNeighborThreeStep(ncBase, ncUp, ncVm, c); //
             BlockTypeInfo btiUmVp = loadBTI(tmp.assign(baseCoo).step(ncUm).step(ncVp)); //loadWithNeighborThreeStep(ncBase, ncUm, ncVp, c); //
             BlockTypeInfo btiUmVm = loadBTI(tmp.assign(baseCoo).step(ncUm).step(ncVm)); //loadWithNeighborThreeStep(ncBase, ncUm, ncVm, c); //
-              currentAo.set(aoFactors(
-                      btiUm.ifSolidFace(ncUp, 4) | btiUmVm.ifSolidFace(ncUp, 2) | btiVm.ifSolidFace(ncUp, 1),
-                      btiUm.ifSolidFace(ncVp, 4) | btiUmVp.ifSolidFace(ncVp, 2) | btiVp.ifSolidFace(ncVp, 1),
-                      btiUp.ifSolidFace(ncVm, 4) | btiUpVm.ifSolidFace(ncVm, 2) | btiVm.ifSolidFace(ncVm, 1),
-                      btiUp.ifSolidFace(ncUm, 4) | btiUpVp.ifSolidFace(ncUm, 2) | btiVp.ifSolidFace(ncUm, 1)
-              ));
+            currentAo.set(aoFactors(
+                    btiUm.ifSolidFace(ncUp, 4) | btiUmVm.ifSolidFace(ncUp, 2) | btiVm.ifSolidFace(ncUp, 1),
+                    btiUm.ifSolidFace(ncVp, 4) | btiUmVp.ifSolidFace(ncVp, 2) | btiVp.ifSolidFace(ncVp, 1),
+                    btiUp.ifSolidFace(ncVm, 4) | btiUpVm.ifSolidFace(ncVm, 2) | btiVm.ifSolidFace(ncVm, 1),
+                    btiUp.ifSolidFace(ncUm, 4) | btiUpVp.ifSolidFace(ncUm, 2) | btiVp.ifSolidFace(ncUm, 1)
+            ));
         });
 //        return 0xFF;
         return currentAo.get();
+    }
+
+    private int calcFaceAoFactor2(VoxelCoo origCoo, NeighborCode ncBase) {
+        byte currentAo = 0;
+        VoxelCoo c = new VoxelCoo();
+        c.assign(origCoo).step(ncBase);
+        if (ncBase == XP) {
+            /**
+             * воксель 0,0,0. Сторона XP - U=>Y, V=>Z
+             * нужны стороны вокруг 1,0,0
+             * 1,1,0-YM
+             * 1,-1,0-YP
+             * 1,0,1-ZM
+             * 1,0,-1-ZP
+             * 1,1,1-YM&ZM
+             * 1,-1,1-YP&ZM
+             * 1,1,-1-YM&ZP
+             * 1,-1,-1-YP&ZP
+             * или проще =>
+             * YM- 1,1,(-1,0,1) срез XY вдоль Z (нет такой)
+             * YP- 1,-1,(-1,0,1) срез XY вдоль Z (есть такой)
+             * ZM- 1,(-1,0,1),1 срез XZ вдоль Y (есть ZX вдоль Y, подходит)
+             * ZP- 1,(-1,0,1),-1 срез XZ вдоль Y (есть ZX вдоль Y, подходит)
+             *
+             * сторона ZP, нужны стороны вокруг 0,0,1
+             * XM- 1,(-1,0,1),1 срез ZX вдоль Y (есть такой)
+             * XP- -1,(-1,0,1),1 срез ZX вдоль Y (есть такой)
+             * YM- (-1,0,1),1,1 срез ZY вдоль X (есть YZ вдоль X, подходит)
+             * YP- (-1,0,1),-1,1 срез ZY вдоль X (есть YZ вдоль X, подходит)
+             *
+             * сторона YP, нужны стороны вокруг 0,1,0
+             * XM- 1,1,(-1,0,1) срез YX вдоль Z (есть XY вдоль Z, подходит)
+             * XP- -1,1,(-1,0,1) срез YX вдоль Z (есть XY вдоль Z, подходит)
+             * ZM- (-1,0,1),1,1 срез YZ вдоль X (есть такой)
+             * ZP- (-1,0,1),1,-1 срез YZ вдоль X (есть такой)
+             */
+//
+//             * YM- 1,1,(-1,0,1) срез XY вдоль Z (есть такой)
+//             * YP- 1,-1,(-1,0,1) срез XY вдоль Z (есть такой)
+//             * ZM- 1,(-1,0,1),1 срез XZ вдоль Y (есть ZX вдоль Y, подходит)
+//             * ZP- 1,(-1,0,1),-1 срез XZ вдоль Y (есть ZX вдоль Y, подходит)
+            // Получим 4ре полные солид маски вдоль прилегающих плоскостей
+            int aUmAm = solidFaceField[YPi * 324 + (c.get(Y_AXIS) -1+ 1) * 18 + (c.get(Z_AXIS) - 1 + 1)];
+            int aUmA0 = solidFaceField[YPi * 324 + (c.get(Y_AXIS) -1+ 1) * 18 + (c.get(Z_AXIS) + 0 + 1)];
+            int aUmAp = solidFaceField[YPi * 324 + (c.get(Y_AXIS) -1+ 1) * 18 + (c.get(Z_AXIS) + 1 + 1)];
+            int aUpAm = solidFaceField[YMi * 324 + (c.get(Y_AXIS) +1+ 1) * 18 + (c.get(Z_AXIS) - 1 + 1)];
+            int aUpA0 = solidFaceField[YMi * 324 + (c.get(Y_AXIS) +1+ 1) * 18 + (c.get(Z_AXIS) + 0 + 1)];
+            int aUpAp = solidFaceField[YMi * 324 + (c.get(Y_AXIS) +1+ 1) * 18 + (c.get(Z_AXIS) + 1 + 1)];
+//            int aUp = solidFaceField[YPi * 324 + (c.get(X_AXIS) + 1) * 18 + (c.get(Y_AXIS) - 1 + 1)];
+            int aVm = solidFaceField[ZPi * 324 + (c.get(Z_AXIS) - 1 + 1) * 18 + (c.get(X_AXIS) + 1)];
+            int aVp = solidFaceField[ZMi * 324 + (c.get(Z_AXIS) + 1 + 1) * 18 + (c.get(X_AXIS) + 1)];
+// теперь нужно получить из них 3 бита для каждого прилегающего угла
+            // маска для блока в координате 0 выглядит так 0000.0000:0000.0000:0000.0011:1000.0000
+            //                                             0000.0000:0000.0000:0000.0000:0000.0111 <- нужно сдвинуть на 7 + координата блока
+            int shiftAlongU = c.get(Z_AXIS) + 7;
+            int shiftAlongV = c.get(Y_AXIS) + 7;
+            int shiftAlongA = c.get(X_AXIS) + 8;
+            //                                             но можно сделать наоборот, солид маску сдвинуть вправо на столько же и & 7
+            aUmAm >>= shiftAlongA;
+            aUmA0 >>= shiftAlongA;
+            aUmAp >>= shiftAlongA;
+            int aUm = aUmAm & 1 | (aUmA0 & 1) << 1 | (aUmAp & 1) << 2;
+            aUpAm >>= shiftAlongA;
+            aUpA0 >>= shiftAlongA;
+            aUpAp >>= shiftAlongA;
+            int aUp = aUpAm & 1 | (aUpA0 & 1) << 1 | (aUpAp & 1) << 2;
+            aVm >>= shiftAlongV;
+            aVp >>= shiftAlongV;
+            // теперь младшие 3 бита это солид-маска прилегающих блоков по прямой, три блока с каждой из 4х сторон.
+
+
+            int indexMask = aUm & 7 | (aUp & 7) << 3 | (aVm & 7) << 6 | (aVp & 7) << 9;
+            currentAo = AO_FACTOR_MATRIX[indexMask];
+            if (currentAo != -1) {
+                System.out.println("c:" + origCoo + " ao=" + currentAo);
+            }
+        }
+
+        return currentAo;
     }
 
     public void enableLoadingMode() {
@@ -385,13 +708,68 @@ public class VoxelField implements Serializable {
 
     /**
      * Compute the ambient occlusion factor from a vertex's neighbor configuration <code>n</code>.
+     * Используются только три младших бита, то есть 8 вариантов на вход
+     * Результат
+     * 000 - 11
+     * 001 - 10
+     * 010 - 10
+     * 011 - 01
+     * 100 - 10
+     * 101 - 00
+     * 110 - 01
+     * 111 - 00
+     * <p>
+     * А Если посчитать результат для формата 4 бит? 2 бита по одной стороне и 2 бита по другой, без промежуточной склейки в 3 битовый вариант
+     * 0000  -> 0  =>	ao = 3
+     * 0001  -> 1  =>	ao = 2
+     * 0010  -> 2  =>	ao = 2
+     * 0011  -> 3  =>	ao = 1
+     * 0100  -> 2  =>	ao = 2
+     * 0101  -> 3  =>	ao = 1
+     * 0110  -> 2  =>	ao = 2
+     * 0111  -> 3  =>	ao = 1
+     * 1000  -> 4  =>	ao = 2
+     * 1001  -> 5  =>	ao = 0
+     * 1010  -> 6  =>	ao = 1
+     * 1011  -> 7  =>	ao = 0
+     * 1100  -> 6  =>	ao = 1
+     * 1101  -> 7  =>	ao = 0
+     * 1110  -> 6  =>	ao = 1
+     * 1111  -> 7  =>	ao = 0
+     * <p>
+     * * 0000   => 3
+     * * 0001   => 2
+     * * 0010   => 2
+     * * 0011   => 1
+     * * 0100   => 2
+     * * 0101   => 1
+     * * 0110   => 2
+     * * 0111   => 1
+     * * 1000   => 2
+     * * 1001   => 0
+     * * 1010   => 1
+     * * 1011   => 0
+     * * 1100   => 1
+     * * 1101   => 0
+     * * 1110   => 1
+     * * 1111   => 0
+     *
+     *
+     *
+     *
+     *
+     *
+     *
+     *
+     *
+     *
      */
     private int aoFactor(int n) {
         return (n & 1) == 1 && (n & 4) == 4 ? 0 : 3 - Integer.bitCount(n);
     }
 
 
-    private void calcAirFlowThroughChunk() {
+    public void calcAirFlowThroughChunk() {
         /**
          * Optimization : set constant value for empty block
          */
