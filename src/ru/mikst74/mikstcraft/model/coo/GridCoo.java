@@ -18,10 +18,11 @@ public abstract class GridCoo<T extends GridCoo<T>> {
         this(coo.x, coo.y, coo.z);
     }
 
-    public void assign(int x, int y, int z) {
+    public T assign(int x, int y, int z) {
         this.x = x;
         this.y = y;
         this.z = z;
+        return (T) this;
     }
 
     public GridCoo(int x, int y, int z) {

@@ -117,8 +117,8 @@ public class GameProperties {
     /**
      * Ambient occlusion factors to be included as a #define in shaders.
      */
-    public static final String AO_FACTORS = "0.10, 0.20, 0.35,1.0";
-//    public static final String AO_FACTORS = "0.60, 0.70, 0.85, 1.0";
+//    public static final String AO_FACTORS = "0.10, 0.20, 0.35,1.0";
+    public static final String AO_FACTORS = "0.60, 0.70, 0.85, 1.0";
 
     static {
         if (GameProperties.DEBUG) {

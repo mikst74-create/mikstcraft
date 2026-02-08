@@ -13,8 +13,8 @@ public class WallXTerrain3DGenerator implements WorldMapGenerator {
         BlockTypeInfo block = BlockTypeDictionary.getBlockTypeInfo(5);
         res.enableLoadingMode();
         if (chunkCoo.getX() == 0 && chunkCoo.getY() == 0 && chunkCoo.getZ() == 0) {
-            for (int u = 0; u <= 15; u++) {
-                for (int v = 0; v <= 15; v++) {
+            for (int u = 0; u <= 10; u++) {
+                for (int v = 0; v <= 10; v++) {
                     res.store(new VoxelCoo(0, u, v), block);
 
                 }

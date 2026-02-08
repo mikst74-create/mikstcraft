@@ -316,7 +316,7 @@ public class VoxelField implements Serializable {
                 nextAoL    = 0;
                 aoMaskR    = 0;
                 aoMaskL    = 0;
-                aoBitValue = 1 << 7;
+                aoBitValue = 1 << 8;
                 int aoAxisUindex = (c.get(ITERATE_AXIS_U) + 1) * 18;
 
                 while (c.iterate(ALONG_AXIS)) {
@@ -328,17 +328,20 @@ public class VoxelField implements Serializable {
                     aoMaskR |= currentAoR == nextAoR ? aoBitValue : 0;
                     aoMaskL |= currentAoL == nextAoL ? aoBitValue : 0;
 
-
+                    currentAoR = nextAoR;
+                    currentAoL = nextAoL;
                     aoBitValue <<= 1;
                 }
                 aoCooIndex                               = aoAxisUindex + (c.get(ITERATE_AXIS_V) + 1);
-                aoSliceRIndex                            = (ncRight.getI() * 324) + aoCooIndex;
-                aoSliceLIndex                            = (ncLeft.getI() * 324) + aoCooIndex;
+                aoSliceRIndex                            = (ncRight.getI324()) + aoCooIndex;
+                aoSliceLIndex                            = (ncLeft.getI324()) + aoCooIndex;
                 aoEqualsWithNextFaceField[aoSliceRIndex] = aoMaskR;
                 aoEqualsWithNextFaceField[aoSliceLIndex] = aoMaskL;
             }
         }
     }
+    // 0  -1  -1  -5 -69
+    //     0   1   0   0
 
     public void recalcMeshData(int axis) {
         VoxelCoo c = new VoxelCoo();
@@ -351,8 +354,8 @@ public class VoxelField implements Serializable {
             while (c.iterate(ITERATE_AXIS_V)) {
                 int meshIndex = (c.get(ITERATE_AXIS_U) << 4) | c.get(ITERATE_AXIS_V);
                 int sliceUVIndex = (c.get(ITERATE_AXIS_U) + 1) * 18 + (c.get(ITERATE_AXIS_V) + 1);
-                int sliceRIndex = (ncRight.getI() * 324) + sliceUVIndex;
-                int sliceLIndex = (ncLeft.getI() * 324) + sliceUVIndex;
+                int sliceRIndex = (ncRight.getI324()) + sliceUVIndex;
+                int sliceLIndex = (ncLeft.getI324()) + sliceUVIndex;
                 int visibleMaskR = (int) doubleBits((visibleFaceField[sliceRIndex] >>> 8) & 0xFFFF);
                 int visibleMaskL = (int) doubleBits((visibleFaceField[sliceLIndex] >>> 8) & 0xFFFF);
                 int equalsMaskR = (int) doubleBits(((textureEqualsWithNextFaceField[sliceRIndex] & aoEqualsWithNextFaceField[sliceRIndex]) >>> 8) & 0xFFFF);
@@ -502,8 +505,8 @@ public class VoxelField implements Serializable {
                     currentVoxel = nextVoxel;
                 }
                 solidCooIndex                                    = solidAxisUindex + (c.get(ITERATE_AXIS_V) + 1);
-                solidSliceRIndex                                 = (ncRight.getI() * 324) + solidCooIndex;
-                solidSliceLIndex                                 = (ncLeft.getI() * 324) + solidCooIndex;
+                solidSliceRIndex                                 = (ncRight.getI324()) + solidCooIndex;
+                solidSliceLIndex                                 = (ncLeft.getI324()) + solidCooIndex;
                 solidFaceField[solidSliceRIndex]                 = solidBitMaskR;
                 solidFaceField[solidSliceLIndex]                 = solidBitMaskL;
                 textureEqualsWithNextFaceField[solidSliceRIndex] = textureMaskR;
@@ -537,10 +540,10 @@ public class VoxelField implements Serializable {
             while (c.iterate(ITERATE_AXIS_V)) {
                 cR.assign(c).inc(ITERATE_AXIS_U);
                 cL.assign(c).dec(ITERATE_AXIS_U);
-                solidSliceRIndex  = (ncRight.getI() * 324) + (c.get(ITERATE_AXIS_U) + 1) * 18 + (c.get(ITERATE_AXIS_V) + 1);
-                solidSliceROIndex = (ncLeft.getI() * 324) + (cR.get(ITERATE_AXIS_U) + 1) * 18 + (cR.get(ITERATE_AXIS_V) + 1);
-                solidSliceLIndex  = (ncLeft.getI() * 324) + (c.get(ITERATE_AXIS_U) + 1) * 18 + (c.get(ITERATE_AXIS_V) + 1);
-                solidSliceLOIndex = (ncRight.getI() * 324) + (cL.get(ITERATE_AXIS_U) + 1) * 18 + (cL.get(ITERATE_AXIS_V) + 1);
+                solidSliceRIndex  = (ncRight.getI324()) + (c.get(ITERATE_AXIS_U) + 1) * 18 + (c.get(ITERATE_AXIS_V) + 1);
+                solidSliceROIndex = (ncLeft.getI324()) + (cR.get(ITERATE_AXIS_U) + 1) * 18 + (cR.get(ITERATE_AXIS_V) + 1);
+                solidSliceLIndex  = (ncLeft.getI324()) + (c.get(ITERATE_AXIS_U) + 1) * 18 + (c.get(ITERATE_AXIS_V) + 1);
+                solidSliceLOIndex = (ncRight.getI324()) + (cL.get(ITERATE_AXIS_U) + 1) * 18 + (cL.get(ITERATE_AXIS_V) + 1);
 
                 visibleFaceField[solidSliceRIndex] = solidFaceField[solidSliceRIndex] & ~solidFaceField[solidSliceROIndex];
                 visibleFaceField[solidSliceLIndex] = solidFaceField[solidSliceLIndex] & ~solidFaceField[solidSliceLOIndex];
@@ -564,7 +567,6 @@ public class VoxelField implements Serializable {
                         continue;
                     }
                     forEachNeighborCode(nc -> aoFactorFaceField[(nc.getI() << 12) + c.idx0()] = (byte) calcFaceAoFactor2(c, nc));
-//                    aoFactorFaceField[(XP.getI() << 12) + c.idx0()] = (byte) calcFaceAoFactor2(c, XP);
                 }
             }
         }
@@ -612,81 +614,89 @@ public class VoxelField implements Serializable {
         return currentAo.get();
     }
 
+
     private int calcFaceAoFactor2(VoxelCoo origCoo, NeighborCode ncBase) {
         byte currentAo = 0;
+        //VoxelCoo c = new VoxelCoo();
+        int aUmAm = 0;
+        int aUmA0 = 0;
+        int aUmAp = 0;
+        int aUpAm = 0;
+        int aUpA0 = 0;
+        int aUpAp = 0;
+        int aUm = 0;
+        int aUp = 0;
+        int aVm = 0;
+        int aVp = 0;
         VoxelCoo c = new VoxelCoo();
         c.assign(origCoo).step(ncBase);
-        if (ncBase == XP) {
-            /**
-             * воксель 0,0,0. Сторона XP - U=>Y, V=>Z
-             * нужны стороны вокруг 1,0,0
-             * 1,1,0-YM
-             * 1,-1,0-YP
-             * 1,0,1-ZM
-             * 1,0,-1-ZP
-             * 1,1,1-YM&ZM
-             * 1,-1,1-YP&ZM
-             * 1,1,-1-YM&ZP
-             * 1,-1,-1-YP&ZP
-             * или проще =>
-             * YM- 1,1,(-1,0,1) срез XY вдоль Z (нет такой)
-             * YP- 1,-1,(-1,0,1) срез XY вдоль Z (есть такой)
-             * ZM- 1,(-1,0,1),1 срез XZ вдоль Y (есть ZX вдоль Y, подходит)
-             * ZP- 1,(-1,0,1),-1 срез XZ вдоль Y (есть ZX вдоль Y, подходит)
-             *
-             * сторона ZP, нужны стороны вокруг 0,0,1
-             * XM- 1,(-1,0,1),1 срез ZX вдоль Y (есть такой)
-             * XP- -1,(-1,0,1),1 срез ZX вдоль Y (есть такой)
-             * YM- (-1,0,1),1,1 срез ZY вдоль X (есть YZ вдоль X, подходит)
-             * YP- (-1,0,1),-1,1 срез ZY вдоль X (есть YZ вдоль X, подходит)
-             *
-             * сторона YP, нужны стороны вокруг 0,1,0
-             * XM- 1,1,(-1,0,1) срез YX вдоль Z (есть XY вдоль Z, подходит)
-             * XP- -1,1,(-1,0,1) срез YX вдоль Z (есть XY вдоль Z, подходит)
-             * ZM- (-1,0,1),1,1 срез YZ вдоль X (есть такой)
-             * ZP- (-1,0,1),1,-1 срез YZ вдоль X (есть такой)
-             */
-//
-//             * YM- 1,1,(-1,0,1) срез XY вдоль Z (есть такой)
-//             * YP- 1,-1,(-1,0,1) срез XY вдоль Z (есть такой)
-//             * ZM- 1,(-1,0,1),1 срез XZ вдоль Y (есть ZX вдоль Y, подходит)
-//             * ZP- 1,(-1,0,1),-1 срез XZ вдоль Y (есть ZX вдоль Y, подходит)
+        if (ncBase == XP || ncBase == XM) {
+            int shiftAlongV = c.get(Y_AXIS) + 7;
+            int shiftAlongA = c.get(X_AXIS) + 8;
+
             // Получим 4ре полные солид маски вдоль прилегающих плоскостей
-            int aUmAm = solidFaceField[YPi * 324 + (c.get(Y_AXIS) -1+ 1) * 18 + (c.get(Z_AXIS) - 1 + 1)];
-            int aUmA0 = solidFaceField[YPi * 324 + (c.get(Y_AXIS) -1+ 1) * 18 + (c.get(Z_AXIS) + 0 + 1)];
-            int aUmAp = solidFaceField[YPi * 324 + (c.get(Y_AXIS) -1+ 1) * 18 + (c.get(Z_AXIS) + 1 + 1)];
-            int aUpAm = solidFaceField[YMi * 324 + (c.get(Y_AXIS) +1+ 1) * 18 + (c.get(Z_AXIS) - 1 + 1)];
-            int aUpA0 = solidFaceField[YMi * 324 + (c.get(Y_AXIS) +1+ 1) * 18 + (c.get(Z_AXIS) + 0 + 1)];
-            int aUpAp = solidFaceField[YMi * 324 + (c.get(Y_AXIS) +1+ 1) * 18 + (c.get(Z_AXIS) + 1 + 1)];
-//            int aUp = solidFaceField[YPi * 324 + (c.get(X_AXIS) + 1) * 18 + (c.get(Y_AXIS) - 1 + 1)];
-            int aVm = solidFaceField[ZPi * 324 + (c.get(Z_AXIS) - 1 + 1) * 18 + (c.get(X_AXIS) + 1)];
-            int aVp = solidFaceField[ZMi * 324 + (c.get(Z_AXIS) + 1 + 1) * 18 + (c.get(X_AXIS) + 1)];
+            aUmAm = (solidFaceField[YPi324 + (c.get(Y_AXIS) - 1 + 1) * 18 + (c.get(Z_AXIS) - 1 + 1)] >> shiftAlongA) & 1;
+            aUmA0 = (solidFaceField[YPi324 + (c.get(Y_AXIS) - 1 + 1) * 18 + (c.get(Z_AXIS) + 0 + 1)] >> shiftAlongA) & 1;
+            aUmAp = (solidFaceField[YPi324 + (c.get(Y_AXIS) - 1 + 1) * 18 + (c.get(Z_AXIS) + 1 + 1)] >> shiftAlongA) & 1;
+            aUpAm = (solidFaceField[YMi324 + (c.get(Y_AXIS) + 1 + 1) * 18 + (c.get(Z_AXIS) - 1 + 1)] >> shiftAlongA) & 1;
+            aUpA0 = (solidFaceField[YMi324 + (c.get(Y_AXIS) + 1 + 1) * 18 + (c.get(Z_AXIS) + 0 + 1)] >> shiftAlongA) & 1;
+            aUpAp = (solidFaceField[YMi324 + (c.get(Y_AXIS) + 1 + 1) * 18 + (c.get(Z_AXIS) + 1 + 1)] >> shiftAlongA) & 1;
+            aVm   = (solidFaceField[ZPi324 + (c.get(Z_AXIS) - 1 + 1) * 18 + (c.get(X_AXIS) + 1)] >> shiftAlongV) & 7;
+            aVp   = (solidFaceField[ZMi324 + (c.get(Z_AXIS) + 1 + 1) * 18 + (c.get(X_AXIS) + 1)] >> shiftAlongV) & 7;
 // теперь нужно получить из них 3 бита для каждого прилегающего угла
             // маска для блока в координате 0 выглядит так 0000.0000:0000.0000:0000.0011:1000.0000
             //                                             0000.0000:0000.0000:0000.0000:0000.0111 <- нужно сдвинуть на 7 + координата блока
-            int shiftAlongU = c.get(Z_AXIS) + 7;
-            int shiftAlongV = c.get(Y_AXIS) + 7;
-            int shiftAlongA = c.get(X_AXIS) + 8;
             //                                             но можно сделать наоборот, солид маску сдвинуть вправо на столько же и & 7
-            aUmAm >>= shiftAlongA;
-            aUmA0 >>= shiftAlongA;
-            aUmAp >>= shiftAlongA;
-            int aUm = aUmAm & 1 | (aUmA0 & 1) << 1 | (aUmAp & 1) << 2;
-            aUpAm >>= shiftAlongA;
-            aUpA0 >>= shiftAlongA;
-            aUpAp >>= shiftAlongA;
-            int aUp = aUpAm & 1 | (aUpA0 & 1) << 1 | (aUpAp & 1) << 2;
-            aVm >>= shiftAlongV;
-            aVp >>= shiftAlongV;
+            aUm = aUmAm | aUmA0 << 1 | aUmAp << 2;
+            aUp = aUpAm | aUpA0 << 1 | aUpAp << 2;
             // теперь младшие 3 бита это солид-маска прилегающих блоков по прямой, три блока с каждой из 4х сторон.
-
-
-            int indexMask = aUm & 7 | (aUp & 7) << 3 | (aVm & 7) << 6 | (aVp & 7) << 9;
-            currentAo = AO_FACTOR_MATRIX[indexMask];
-            if (currentAo != -1) {
-                System.out.println("c:" + origCoo + " ao=" + currentAo);
-            }
         }
+        if (ncBase == YP || ncBase == YM) {
+            int shiftAlongV = c.get(Z_AXIS) + 7;
+            int shiftAlongA = c.get(Y_AXIS) + 8;
+
+            // Получим 4ре полные солид маски вдоль прилегающих плоскостей
+            aUmAm = (solidFaceField[ZPi324 + (c.get(Z_AXIS) - 1 + 1) * 18 + (c.get(X_AXIS) - 1 + 1)] >> shiftAlongA) & 1;
+            aUmA0 = (solidFaceField[ZPi324 + (c.get(Z_AXIS) - 1 + 1) * 18 + (c.get(X_AXIS) + 0 + 1)] >> shiftAlongA) & 1;
+            aUmAp = (solidFaceField[ZPi324 + (c.get(Z_AXIS) - 1 + 1) * 18 + (c.get(X_AXIS) + 1 + 1)] >> shiftAlongA) & 1;
+            aUpAm = (solidFaceField[ZMi324 + (c.get(Z_AXIS) + 1 + 1) * 18 + (c.get(X_AXIS) - 1 + 1)] >> shiftAlongA) & 1;
+            aUpA0 = (solidFaceField[ZMi324 + (c.get(Z_AXIS) + 1 + 1) * 18 + (c.get(X_AXIS) + 0 + 1)] >> shiftAlongA) & 1;
+            aUpAp = (solidFaceField[ZMi324 + (c.get(Z_AXIS) + 1 + 1) * 18 + (c.get(X_AXIS) + 1 + 1)] >> shiftAlongA) & 1;
+            aVm   = (solidFaceField[XPi324 + (c.get(X_AXIS) - 1 + 1) * 18 + (c.get(Y_AXIS) + 1)] >> shiftAlongV) & 7;
+            aVp   = (solidFaceField[XMi324 + (c.get(X_AXIS) + 1 + 1) * 18 + (c.get(Y_AXIS) + 1)] >> shiftAlongV) & 7;
+// теперь нужно получить из них 3 бита для каждого прилегающего угла
+            // маска для блока в координате 0 выглядит так 0000.0000:0000.0000:0000.0011:1000.0000
+            //                                             0000.0000:0000.0000:0000.0000:0000.0111 <- нужно сдвинуть на 7 + координата блока
+            //                                             но можно сделать наоборот, солид маску сдвинуть вправо на столько же и & 7
+            aUm = aUmAm | aUmA0 << 1 | aUmAp << 2;
+            aUp = aUpAm | aUpA0 << 1 | aUpAp << 2;
+            // теперь младшие 3 бита это солид-маска прилегающих блоков по прямой, три блока с каждой из 4х сторон.
+        }
+        if (ncBase == ZP || ncBase == ZM) {
+            int shiftAlongV = c.get(X_AXIS) + 7;
+            int shiftAlongA = c.get(Z_AXIS) + 8;
+
+            // Получим 4ре полные солид маски вдоль прилегающих плоскостей
+            aUmAm = (solidFaceField[XPi324 + (c.get(X_AXIS) - 1 + 1) * 18 + (c.get(Y_AXIS) - 1 + 1)] >> shiftAlongA) & 1;
+            aUmA0 = (solidFaceField[XPi324 + (c.get(X_AXIS) - 1 + 1) * 18 + (c.get(Y_AXIS) + 0 + 1)] >> shiftAlongA) & 1;
+            aUmAp = (solidFaceField[XPi324 + (c.get(X_AXIS) - 1 + 1) * 18 + (c.get(Y_AXIS) + 1 + 1)] >> shiftAlongA) & 1;
+            aUpAm = (solidFaceField[XMi324 + (c.get(X_AXIS) + 1 + 1) * 18 + (c.get(Y_AXIS) - 1 + 1)] >> shiftAlongA) & 1;
+            aUpA0 = (solidFaceField[XMi324 + (c.get(X_AXIS) + 1 + 1) * 18 + (c.get(Y_AXIS) + 0 + 1)] >> shiftAlongA) & 1;
+            aUpAp = (solidFaceField[XMi324 + (c.get(X_AXIS) + 1 + 1) * 18 + (c.get(Y_AXIS) + 1 + 1)] >> shiftAlongA) & 1;
+            aVm   = (solidFaceField[YPi324 + (c.get(Y_AXIS) - 1 + 1) * 18 + (c.get(Z_AXIS) + 1)] >> shiftAlongV) & 7;
+            aVp   = (solidFaceField[YMi324 + (c.get(Y_AXIS) + 1 + 1) * 18 + (c.get(Z_AXIS) + 1)] >> shiftAlongV) & 7;
+// теперь нужно получить из них 3 бита для каждого прилегающего угла
+            // маска для блока в координате 0 выглядит так 0000.0000:0000.0000:0000.0011:1000.0000
+            //                                             0000.0000:0000.0000:0000.0000:0000.0111 <- нужно сдвинуть на 7 + координата блока
+            //                                             но можно сделать наоборот, солид маску сдвинуть вправо на столько же и & 7
+            aUm = aUmAm | aUmA0 << 1 | aUmAp << 2;
+            aUp = aUpAm | aUpA0 << 1 | aUpAp << 2;
+            // теперь младшие 3 бита это солид-маска прилегающих блоков по прямой, три блока с каждой из 4х сторон.
+        }
+
+        int indexMask = aUm | aUp << 3 | aVm << 6 | aVp << 9;
+        currentAo = AO_FACTOR_MATRIX[indexMask];
+
 
         return currentAo;
     }
