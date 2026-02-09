@@ -17,6 +17,7 @@ public class DefaultMapCreator {
         map.addHandler(GLFW_KEY_A, GO_LEFT);
         map.addHandler(GLFW_KEY_S, GO_BACK);
         map.addHandler(GLFW_KEY_Y, FLY_UP);
+//        map.addHandler(GLFW_KEY_SPACE, FLY_UP);
         map.addHandler(GLFW_KEY_H, FLY_DOWN);
         map.addHandler(GLFW_KEY_C, TOGGLE_SQUAT_MODE);
         map.addHandler(GLFW_KEY_LEFT_SHIFT, TOGGLE_SNEAK_MODE);

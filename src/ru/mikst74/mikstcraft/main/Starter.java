@@ -16,8 +16,9 @@ import ru.mikst74.mikstcraft.server.GameServer;
 import ru.mikst74.mikstcraft.storage.WorldSaver;
 import ru.mikst74.mikstcraft.util.time.Profiler;
 import ru.mikst74.mikstcraft.world.WorldMap;
-import ru.mikst74.mikstcraft.world.generator.FlatTerrain3DGenerator;
-import ru.mikst74.mikstcraft.world.generator.WallXTerrain3DGenerator;
+import ru.mikst74.mikstcraft.world.generator.FullEgdesTerrain3DGenerator;
+import ru.mikst74.mikstcraft.world.generator.NoiseTerrain3DGenerator;
+import ru.mikst74.mikstcraft.world.generator.OnlyEgdesTerrain3DGenerator;
 import ru.mikst74.mikstcraft.world.generator.WorldMapGenerator;
 
 import java.util.ArrayList;
@@ -35,7 +36,10 @@ import static ru.mikst74.mikstcraft.util.time.Profiler.printProfile;
 @Getter
 public class Starter {
     private static final WorldMapGenerator MAP_GENERATOR =
-    new WallXTerrain3DGenerator();
+    new FullEgdesTerrain3DGenerator();
+//    new NoiseTerrain3DGenerator();
+//    new OnlyEgdesTerrain3DGenerator();
+//    new WallXTerrain3DGenerator();
 //            new FlatTerrain3DGenerator();
     //                new NoiseTerrain3DGenerator();;
     private ThreadManager threadManager;
@@ -144,7 +148,7 @@ public class Starter {
 
     private void createRenderedWorldArea() {
         RenderedWorldArea renderedWorldArea = new RenderedWorldArea(gameInstance.getWorldMap());
-        renderedWorldArea.linkCamera(gameInstance.getCameras().get(0));
+        renderedWorldArea.linkToCamera(gameInstance.getCameras().get(0));
         gameInstance.setRenderedWorldArea(renderedWorldArea);
 
         GameRenderer gameRenderer = new GameRenderer(gameInstance);
@@ -167,6 +171,7 @@ public class Starter {
         GO_BACK.setRunnable(cp::goBack, cp::stopBack);
         FLY_UP.setRunnable(cp::goUp, cp::stopUp);
         FLY_DOWN.setRunnable(cp::goDown, cp::stopDown);
+        JUMP.setRunnable(cp::goJump, cp::stopJump);
 
         ATTACK.setRunnable(cp::doAttack, cp::stopAttack);
         INTERACTION.setRunnable(cp::doInteraction, cp::stopInteraction);
@@ -194,7 +199,6 @@ public class Starter {
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         scheduler.scheduleAtFixedRate(() -> {
             long timeMillis = System.currentTimeMillis();
-            //gameTickQueue.sendMessage(timeMillis);
             gameTickHandlers.forEach(h -> h.accept(timeMillis));
         }, 0, 2, TimeUnit.MILLISECONDS);
         threadManager.addScheduler(scheduler);

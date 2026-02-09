@@ -6,6 +6,7 @@ import org.joml.Vector4f;
 import org.lwjgl.opengl.GL;
 import ru.mikst74.mikstcraft.model.font.Font;
 import ru.mikst74.mikstcraft.render.RenderedWorldArea;
+import ru.mikst74.mikstcraft.render.box.BoxRenderer;
 import ru.mikst74.mikstcraft.render.selectedvoxel.SelectedVoxelRenderer;
 import ru.mikst74.mikstcraft.render.shader.texturedquads.TexturedQuadsItem;
 import ru.mikst74.mikstcraft.render.text.TextAreaRenderer;
@@ -13,11 +14,13 @@ import ru.mikst74.mikstcraft.render.texturedquads.TexturedQuadsRenderer;
 import ru.mikst74.mikstcraft.settings.GameProperties;
 import ru.mikst74.mikstcraft.texture.TextureInfo;
 import ru.mikst74.mikstcraft.util.DelayedRunnable;
+import ru.mikst74.mikstcraft.util.math.Hitbox;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.lwjgl.glfw.GLFW.glfwMakeContextCurrent;
 import static org.lwjgl.glfw.GLFW.glfwSwapBuffers;
@@ -34,13 +37,15 @@ public class GameRenderer {
     private       RenderedWorldArea renderedWorldArea;
 
     @Setter
-    private WindowManager    windowManager;
-    private TextAreaRenderer textAreaRenderer;
+    private WindowManager windowManager;
 
+
+    private TextAreaRenderer      textAreaRenderer;
     private TexturedQuadsRenderer texturedQuadsRenderer;
-
     @Setter
     private SelectedVoxelRenderer selectedVoxelRenderer;
+    private BoxRenderer           hitboxRenderer;
+    private List<Hitbox>          hotboxList;
 
     public GameRenderer(GameInstance gameInstance) {
         this.gameInstance = gameInstance;
@@ -72,7 +77,10 @@ public class GameRenderer {
         selectedVoxelRenderer.linkToCamera(gameInstance.getCurrentCamera());
         selectedVoxelRenderer.linkToSelectedVoxel(gameInstance.getCurrentPlayer().getSelectionDetector().getSelectedVoxel());
 
-
+        hitboxRenderer = new BoxRenderer();
+        hitboxRenderer.setCamera(gameInstance.getCurrentCamera());
+        hotboxList     = new ArrayList<>();
+        hotboxList.addAll(gameInstance.getPlayers().stream().map(p -> p.getHitbox()).collect(Collectors.toList()));
         /// - **
         Thread renderThread = new Thread(this::renderLoop);
         renderThread.setName("Render Thread");
@@ -94,36 +102,29 @@ public class GameRenderer {
                 glBindFramebuffer(GL_FRAMEBUFFER, windowManager.getFbo());
                 glViewport(0, 0, windowManager.getRenderWidth(), windowManager.getRenderHeight());
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            }else{
+            } else {
                 glBindFramebuffer(GL_FRAMEBUFFER, windowManager.getFbo());
                 glViewport(0, 0, windowManager.getRenderWidth(), windowManager.getRenderHeight());
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
             }
-            renderedWorldArea.createInRenderDistanceAndDestroyOutOfRenderDistanceChunks();
-            renderedWorldArea.rebuildMeshForUpdatedChunks();
-            if (1 == 1) {
-                profile("drawChunksWithMultiDrawElementsBaseVertex", renderedWorldArea::drawChunksWithMultiDrawElementsBaseVertex);
-            }
-            selectedVoxelRenderer.render();
-            textAreaRenderer.addLine("pos:" + renderedWorldArea.getPosition());
-            textAreaRenderer.render();
-//            profile("drawSelection", this::drawSelection);
+
+            render();
 
             if (RENDER_OVER_TEXTURE) {
-// Bind default framebuffer (window) and set window's viewport
+                // Bind default framebuffer (window) and set window's viewport
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 glViewport(0, 0, windowManager.getWidth() * 2, windowManager.getHeight() * 2);
 
-// Clear the window's buffers
+                // Clear the window's buffers
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-// Bind the FBO's texture
+                // Bind the FBO's texture
                 glBindTexture(GL_TEXTURE_2D, windowManager.getRenderTextureId());
                 glEnable(GL_CULL_FACE);
                 glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-// ******* DRAW A FULL-SCREEN QUAD HERE *******
-// Use a simple shader program that samples the bound texture and draws it
+                // ******* DRAW A FULL-SCREEN QUAD HERE *******
+                // Use a simple shader program that samples the bound texture and draws it
                 texturedQuadsRenderer.render();
 
                 glBlitFramebuffer(0, 0, windowManager.getWidth(), windowManager.getHeight(),
@@ -131,17 +132,30 @@ public class GameRenderer {
                         GL_COLOR_BUFFER_BIT, GL_LINEAR);
                 glfwSwapBuffers(windowManager.getWindow());
             } else {
-
                 glBindFramebuffer(GL_READ_FRAMEBUFFER, windowManager.getFbo());
                 glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
                 glViewport(0, 0, windowManager.getWidth(), windowManager.getHeight());
-//
+
                 glBlitFramebuffer(0, 0, windowManager.getWidth(), windowManager.getHeight(),
                         0, 0, windowManager.getWidth(), windowManager.getHeight(),
                         GL_COLOR_BUFFER_BIT, GL_LINEAR);
                 glfwSwapBuffers(windowManager.getWindow());
             }
         }
+    }
+
+    private void render() {
+        renderedWorldArea.createInRenderDistanceAndDestroyOutOfRenderDistanceChunks();
+        renderedWorldArea.rebuildMeshForUpdatedChunks();
+        if (1 == 1) {
+            profile("drawChunksWithMultiDrawElementsBaseVertex", renderedWorldArea::drawChunksWithMultiDrawElementsBaseVertex);
+        }
+
+
+        selectedVoxelRenderer.render();
+        hitboxRenderer.render(hotboxList);
+        textAreaRenderer.addLine("pos:" + renderedWorldArea.getPosition());
+        textAreaRenderer.render();
     }
 
     private void updateStatsInWindowTitle() {

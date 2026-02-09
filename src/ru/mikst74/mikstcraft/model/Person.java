@@ -33,7 +33,8 @@ public class Person extends BaseEntity {
 
     public Person(CommunicationManager communicationManager) {
         super(communicationManager);
-        position.x = 3;
+        position.x = 5;
+        position.z=5;
         position.y = 3.3f;
         hitbox.assign(
                 -GameProperties.PLAYER_WIDTH * 0.5f,
@@ -46,7 +47,7 @@ public class Person extends BaseEntity {
         normalSpeed = 4.0f;
         afterMove();
         afterRotate();
-        primaryItem = ItemDictionary.getInstance().getAllItems().get(5);
+        primaryItem = ItemDictionary.getInstance().getAllItems().get(1);
     }
 
     @Override
@@ -91,4 +92,5 @@ public class Person extends BaseEntity {
             }
         }
     }
+
 }

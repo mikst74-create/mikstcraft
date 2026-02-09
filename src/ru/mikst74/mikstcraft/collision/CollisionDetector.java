@@ -24,11 +24,16 @@ public class CollisionDetector {
     /**
      * Handle any collisions with the player and the voxels.
      */
-    public void handleCollisions(Hitbox hitbox, Vector3f delta) {
+    public List<Contact> handleCollisions(Hitbox hitbox, Vector3f delta) {
 //    public void handleCollisions(float dt, Vector3f v, Vector3f p) {
         List<Contact> contacts = new ArrayList<>();
         collisionDetection(hitbox, delta, contacts);
+//        contacts.forEach(c -> System.out.println("find contact: " + c));
+//        if (!contacts.isEmpty()) {
+//            delta.set(0);
+//        }
 //        collisionResponse(dt, v, p, contacts);
+        return contacts;
     }
 
     /**
@@ -53,13 +58,14 @@ public class CollisionDetector {
     }
 
     private boolean isCollidingX(Hitbox hitbox, float dx, List<Contact> contacts) {
-        int x = (int) (hitbox.actual.x + (dx > 0 ? hitbox.size.x + dx-1: dx));
-
+        int x = (int) floor(hitbox.actual.x + (dx > 0 ? hitbox.size.x + dx : dx));
         for (int y = (int) floor(hitbox.actual.y); y <= (int) floor(hitbox.actual.y + hitbox.size.y); y++) {
             for (int z = (int) floor(hitbox.actual.z); z <= (int) floor(hitbox.actual.z + hitbox.size.z); z++) {
-                if (!checkCollide(contacts, x, y, z)) {
+                if (!checkCollide(contacts, x, y, z, 1, 0, 0)) {
+//                    System.out.println("FALSE check collide dx=" + dx + " for x=" + x + ", y=" + y + ", z=" + z + " hitbox pos=" + hitbox.actual + " size=" + hitbox.size);
                     continue;
                 }
+//                System.out.println("X TRUE! check collide dx=" + dx + " for x=" + x + ", y=" + y + ", z=" + z + " hitbox pos=" + hitbox.actual + " size=" + hitbox.size);
                 return true;
             }
         }
@@ -68,13 +74,14 @@ public class CollisionDetector {
 
 
     private boolean isCollidingY(Hitbox hitbox, float dy, List<Contact> contacts) {
-        int y = (int) (hitbox.actual.y + (dy > 0 ? hitbox.size.y + dy : dy));
+        int y = (int) floor(hitbox.actual.y + (dy > 0 ? hitbox.size.y + dy : dy));
 
         for (int x = (int) floor(hitbox.actual.x); x <= (int) floor(hitbox.actual.x + hitbox.size.x); x++) {
             for (int z = (int) floor(hitbox.actual.z); z <= (int) floor(hitbox.actual.z + hitbox.size.z); z++) {
-                if (!checkCollide(contacts, x, y, z)) {
+                if (!checkCollide(contacts, x, y, z, 0, 1, 0)) {
                     continue;
                 }
+//                System.out.println("Y TRUE! check collide dz=" + dy + " for x=" + x + ", y=" + y + ", z=" + z + " hitbox pos=" + hitbox.actual + " size=" + hitbox.size);
                 return true;
             }
         }
@@ -82,26 +89,28 @@ public class CollisionDetector {
     }
 
     private boolean isCollidingZ(Hitbox hitbox, float dz, List<Contact> contacts) {
-        int z = (int) (hitbox.actual.z + (dz > 0 ? hitbox.size.z + dz-1 : dz));
+        int z = (int) floor(hitbox.actual.z + (dz > 0 ? hitbox.size.z + dz : dz));
 
         for (int x = (int) floor(hitbox.actual.x); x <= (int) floor(hitbox.actual.x + hitbox.size.x); x++) {
             for (int y = (int) floor(hitbox.actual.y); y <= (int) floor(hitbox.actual.y + hitbox.size.y); y++) {
-                if (!checkCollide(contacts, x, y, z)) {
+                if (!checkCollide(contacts, x, y, z, 0, 0, 1)) {
                     continue;
                 }
+//                System.out.println("Z TRUE! check collide dz=" + dz + " for x=" + x + ", y=" + y + ", z=" + z + " hitbox pos=" + hitbox.actual + " size=" + hitbox.size);
                 return true;
             }
         }
         return false;
     }
 
-    private boolean checkCollide(List<Contact> contacts, int x, int y, int z) {
+    private boolean checkCollide(List<Contact> contacts, int x, int y, int z, int nx, int ny, int nz) {
         coo.assign(x, y, z);
         BlockTypeInfo blockInfo = worldMap.getVoxel(coo);
         if (blockInfo.getHitbox().isEmpty()) {
             return false;
         }
-        contacts.add(new Contact(coo, blockInfo));
+//        System.out.println("Contact (" + x + "," + y + "," + z + ") with: " + blockInfo);
+        contacts.add(new Contact(coo, blockInfo, nx, ny, nz));
         return true;
     }
 

@@ -7,6 +7,7 @@ import org.joml.Vector3f;
 import ru.mikst74.mikstcraft.collision.CollisionDetector;
 import ru.mikst74.mikstcraft.input.InputEventData;
 import ru.mikst74.mikstcraft.main.CommunicationManager;
+import ru.mikst74.mikstcraft.model.Contact;
 import ru.mikst74.mikstcraft.model.time.GameTick;
 import ru.mikst74.mikstcraft.util.math.Hitbox;
 
@@ -21,12 +22,13 @@ import static ru.mikst74.mikstcraft.util.math.ExtMath.isZeroVector;
 
 @Getter
 public class BaseEntity {
-    public static final  float    FRACTION_START          = 0.03f;
-    public static final  float    FRACTION_STOP           = 0.97f;
-    private static final float    ONE_VELOCITY_PER_SECOND = (1 / GameTick.TICKS_PER_SECOND);
-    public static final  Vector3f UP_VECTOR               = new Vector3f(0, 1, 0);
-
-    protected final CommunicationManager communicationManager;
+    public static final  float                FRACTION_START          = 0.03f;
+    public static final  float                FRACTION_STOP           = 0.97f;
+    private static final float                ONE_VELOCITY_PER_SECOND = (1 / GameTick.TICKS_PER_SECOND);
+    public static final  Vector3f             UP_VECTOR               = new Vector3f(0, 1, 0);
+    private static final float                GRAVITY                 = 10f;
+    private static final float                JUMP_VELOCITY           = 7f;
+    protected final      CommunicationManager communicationManager;
 
     @Setter
     private CollisionDetector collisionDetector;
@@ -89,6 +91,7 @@ public class BaseEntity {
     protected final Vector3f    tmpMoveVectorY = new Vector3f();
     protected final Vector3f    tmpMoveVectorZ = new Vector3f();
     private         long        lastGameTick;
+    private         float       gravityY       = 0;
 
     public BaseEntity(CommunicationManager communicationManager) {
         this.communicationManager = communicationManager;
@@ -135,9 +138,15 @@ public class BaseEntity {
 
     private boolean beforeMove(Vector3f delta) {
         if (collisionDetector != null) {
-            collisionDetector.handleCollisions(hitbox, delta);
+            List<Contact> contacts = collisionDetector.handleCollisions(hitbox, delta);
+            contacts.stream().filter(c -> c.ny == 1)
+                    .findFirst()
+                    .ifPresent((a) -> gravityY = 0);
+
         }
+
 //        return true;
+
         return delta.x != 0 || delta.y != 0 || delta.z != 0;
     }
 
@@ -179,7 +188,7 @@ public class BaseEntity {
         updateDirection();
     }
 
-  
+
     public void onChangeHandler(BaseEntity producer) {
         afterMove();
         afterRotate();
@@ -219,6 +228,16 @@ public class BaseEntity {
         updateIsGoing();
     }
 
+
+    public void goJump(InputEventData inputEventData) {
+        gravityY = -JUMP_VELOCITY;
+        updateIsGoing();
+
+    }
+
+    public void stopJump(InputEventData inputEventData) {
+    }
+
     public void stopForward(InputEventData inputEventData) {
         isGoingForward = false;
         updateIsGoing();
@@ -254,13 +273,16 @@ public class BaseEntity {
         velocityGoingDirectionCoef = velocityGoingDirectionCoefMatrix[((isGoingForward || isGoingBack) ? 1 : 0) + ((isGoingRight || isGoingLeft) ? 1 : 0) + ((isGoingUp || isGoingDown) ? 1 : 0)];
     }
 
-    public void updateVelocityVector() {
-
-        if (isGoing) {
+    public void updateVelocityVector(float dt) {
+        if (isGoing || true) {
             velocity.x = smoothChangeVelocity(isGoingForward, isGoingBack, velocity.x);
             velocity.y = smoothChangeVelocity(isGoingUp, isGoingDown, velocity.y);
             velocity.z = smoothChangeVelocity(isGoingRight, isGoingLeft, velocity.z);
 
+            if (!isFly && !isSwim) {
+                velocity.y -= gravityY * dt;
+                gravityY += GRAVITY * dt;
+            }
             if (isFly) {
                 velocity.mul(flySpeed, speedVelocity);
             } else if (isSneak) {
@@ -295,9 +317,9 @@ public class BaseEntity {
     }
 
     public void applyGameTick(long gameTick) {
-        if (isGoing) {
-            updateVelocityVector();
+        if (isGoing || true) {
             float dt = velocityGoingDirectionCoef * ((float) (gameTick - lastGameTick) * ONE_VELOCITY_PER_SECOND);
+            updateVelocityVector(dt);
 
             // calc X delta (go forward)
             directionH.mul(dt * speedVelocity.x, tmpMoveVectorX);

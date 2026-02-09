@@ -69,7 +69,6 @@ public class RenderedWorldArea {
     private final Comparator<RenderedChunk> inViewAndDistance = inView.thenComparing(byDistance);
 
     @Getter
-    // еще большая магия =) что-то про видимые грани
     private final FrustumPlanes frustumPlanes = new FrustumPlanes();
 
     /**
@@ -128,7 +127,7 @@ public class RenderedWorldArea {
 
     }
 
-    public void linkCamera(Camera camera) {
+    public void linkToCamera(Camera camera) {
         position = camera.getPosition();
         chunkRenderer.setMvp(camera.getMvp());
         chunkRenderer.setPosition(camera.getPosition());

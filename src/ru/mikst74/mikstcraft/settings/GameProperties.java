@@ -55,7 +55,7 @@ public class GameProperties {
     /**
      * The total height of the player's collision box.
      */
-    public static final float PLAYER_HEIGHT = 2.1f;//1.80f;
+    public static final float PLAYER_HEIGHT =  1.80f;
     /**
      * The eye level of the player.
      */
@@ -63,7 +63,7 @@ public class GameProperties {
     /**
      * The width of the player's collision box.
      */
-    public static final float PLAYER_WIDTH = 1.1f;//0.4f;
+    public static final float PLAYER_WIDTH = 0.6f;//1.1f;//0.4f;
     /**
      * The number of chunks whose voxel fields are kept in memory to load or store voxels.
      */
@@ -72,7 +72,7 @@ public class GameProperties {
      * The number of chunks, starting from the player's position, that should be visible in any given
      * direction.
      */
-    public static  int MAX_RENDER_DISTANCE_CHUNKS = 6;//40;
+    public static  int MAX_RENDER_DISTANCE_CHUNKS = 5;//40;
     /**
      * Distance to the far plane.
      */

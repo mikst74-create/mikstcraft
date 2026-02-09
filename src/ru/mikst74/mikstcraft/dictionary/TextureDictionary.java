@@ -28,6 +28,7 @@ public class TextureDictionary {
         Map<String, String> loadMap = new HashMap<>();
 
         loadMap.put("DEFAULT", "DEFAULT.png");
+        loadMap.put("Grass", "grass_block_top.png");
         loadMap.put("Acacia", "Acacia_Planks_(texture)_JE3_BE2.png");
         loadMap.put("Andesite", "Andesite_(texture)_JE3_BE2.png");
         loadMap.put("Basalt", "Basalt_(top_texture)_JE1_BE1.png");
@@ -35,9 +36,9 @@ public class TextureDictionary {
         loadMap.put("Birch", "Birch_Planks_(texture)_JE3_BE2.png");
         loadMap.put("Blackstone", "Blackstone_(top_texture)_JE1_BE1.png");
         loadMap.put("Iron", "Block_of_Raw_Iron_(texture)_JE3_BE2.png");
-        loadMap.put("Blue_Ice", "Blue_Ice_(texture)_JE1_BE1.png");
-        loadMap.put("Coral", "Brain_Coral_Block_(texture)_JE2_BE1.png");
         loadMap.put("Bricks", "Bricks_(texture)_JE5_BE3.png");
+        loadMap.put("Coral", "Brain_Coral_Block_(texture)_JE2_BE1.png");
+        loadMap.put("Blue_Ice", "Blue_Ice_(texture)_JE1_BE1.png");
         addTextures(SOLID_BLOCK_TEXTURE_ARRAY,TextureArrayLoader.loadTextures(loadMap, 16, 16));
 
         DEFAULT_TEXTURE = allTextures.get("DEFAULT");
