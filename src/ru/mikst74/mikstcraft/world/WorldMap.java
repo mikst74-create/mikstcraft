@@ -16,7 +16,7 @@ import static ru.mikst74.mikstcraft.dictionary.BlockTypeDictionary.AIR_BLOCK;
  */
 @Getter
 public class WorldMap {
-    private static final int          ENSURED_REGION_SIZE = 1; // 5 chunk to each side from player position
+    private static final int          ENSURED_REGION_SIZE = 3;//1; // 5 chunk to each side from player position
     private              ChunkManager chunkManager;
     //=
 //               new ChunkManager(new NoiseTerrainGenerator());

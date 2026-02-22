@@ -1,14 +1,18 @@
 package ru.mikst74.mikstcraft.render;
 
 import lombok.Getter;
+import org.joml.FrustumIntersection;
+import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector3i;
 import org.lwjgl.PointerBuffer;
+import org.lwjgl.system.MemoryStack;
 import ru.mikst74.mikstcraft.model.NeighborCode;
 import ru.mikst74.mikstcraft.model.camera.Camera;
 import ru.mikst74.mikstcraft.model.chunk.Chunk;
 import ru.mikst74.mikstcraft.model.coo.ChunkCoo;
 import ru.mikst74.mikstcraft.model.coo.WCVConverter;
+import ru.mikst74.mikstcraft.model.coo.WorldCoo;
 import ru.mikst74.mikstcraft.render.buffers.PerFaceBuffers;
 import ru.mikst74.mikstcraft.render.chunk.*;
 import ru.mikst74.mikstcraft.render.model.FrustumPlanes;
@@ -16,27 +20,24 @@ import ru.mikst74.mikstcraft.settings.GameProperties;
 import ru.mikst74.mikstcraft.util.array.ThreeDimensionUnlimitedField;
 import ru.mikst74.mikstcraft.world.WorldMap;
 import ru.mikst74.mikstcraft.world.chunk.ChunkDistance;
-import ru.mikst74.mikstcraft.world.chunk.ChunkNeighborSupplier;
-import org.lwjgl.system.MemoryStack;
 
 import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.BitSet;
-import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static java.lang.Math.floor;
-import static java.util.Comparator.comparing;
-import static java.util.Comparator.comparingDouble;
+import static org.lwjgl.system.MemoryStack.stackPush;
 import static ru.mikst74.mikstcraft.model.coo.VoxelCoo.CHUNK_SIZE;
 import static ru.mikst74.mikstcraft.settings.GameProperties.DEBUG2;
 import static ru.mikst74.mikstcraft.settings.OpenGLProperties.drawPointsWithGS;
 import static ru.mikst74.mikstcraft.settings.OpenGLProperties.useMultiDrawIndirect;
 import static ru.mikst74.mikstcraft.util.time.Profiler.profile;
-import static org.lwjgl.system.MemoryStack.stackPush;
 
 /*
   Хранит видимую часть карты, круг из чанков диаметром MAX_RENDER_DISTANCE_METERS, как массивы RenderedChunk (чанки с подготовленными данными для ренедринга)
@@ -61,12 +62,12 @@ public class RenderedWorldArea {
     public final List<RenderedChunk> frontierChunks = new ArrayList<>();
 
     // позиция центра области на предыдущем кадре (вынести в WorldAreaRenderer)
-    private final ChunkCoo                  lastPosition      = new ChunkCoo(Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE);
-    private final WCVConverter              wcv               = new WCVConverter();
+    private final ChunkCoo     lastPosition = new ChunkCoo(Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE);
+    private final WCVConverter wcv          = new WCVConverter();
     // Пока магия
-    private final Comparator<RenderedChunk> inView            = comparing(this::chunkNotInFrustum);
-    private final Comparator<RenderedChunk> byDistance        = comparingDouble(c -> ChunkDistance.distToChunk(c.getChunk().getCoo()));
-    private final Comparator<RenderedChunk> inViewAndDistance = inView.thenComparing(byDistance);
+//    private final Comparator<RenderedChunk> inView            = comparing(this::chunkNotInFrustum);
+//    private final Comparator<RenderedChunk> byDistance        = comparingDouble(c -> ChunkDistance.distToChunk(c.getChunk().getCoo()));
+//    private final Comparator<RenderedChunk> inViewAndDistance = inView.thenComparing(byDistance);
 
     @Getter
     private final FrustumPlanes frustumPlanes = new FrustumPlanes();
@@ -105,6 +106,8 @@ public class RenderedWorldArea {
     public        int                      indirectDrawBuffer;
     private       long                     indirectDrawBufferAddr;
 
+    private final ExecutorService executorService;
+
     public RenderedWorldArea(WorldMap worldMap) {
         this.worldMap            = worldMap;
         this.position            = new Vector3f();
@@ -124,7 +127,7 @@ public class RenderedWorldArea {
         PerFaceBuffers.voxelVertexSize = drawPointsWithGS ? 2 * Integer.BYTES : Integer.BYTES + Short.BYTES + (!useMultiDrawIndirect ? Integer.BYTES : 0);
 
         PerFaceBuffers.createChunkInfoBuffers();
-
+        executorService = Executors.newFixedThreadPool(10);
     }
 
     public void linkToCamera(Camera camera) {
@@ -195,6 +198,7 @@ public class RenderedWorldArea {
             if (GameProperties.DEBUG) {
                 System.out.println("Frontier chunk is not in view anymore: " + rc);
             }
+            System.out.println("Frontier chunk is not in view anymore: " + rc);
 
             renderedChunkDestroyer.destroyChunk(rc);
         });
@@ -203,12 +207,31 @@ public class RenderedWorldArea {
     /**
      * Determine whether the given chunk does <i>not</i> intersect the view frustum.
      */
-    public boolean chunkNotInFrustum(RenderedChunk renderedChunk) {
+    public boolean chunkNotInFrustum(WorldCoo wcoo) {
 //        WorldCoo coo111=new WorldCoo(renderedChunk.getWCoo());
-        float xf = (renderedChunk.getWCoo().getX()) - (float) floor(position.x);
-        float yf = (renderedChunk.getWCoo().getY()) - (float) floor(position.y);
-        float zf = (renderedChunk.getWCoo().getZ()) - (float) floor(position.z);
-        return frustumPlanes.culledXY(xf, yf, zf, xf + CHUNK_SIZE, yf + CHUNK_SIZE, zf + CHUNK_SIZE);
+        float xf = (wcoo.getX()) - (float) floor(position.x);
+        float yf = (wcoo.getY()) - (float) floor(position.y);
+        float zf = (wcoo.getZ()) - (float) floor(position.z);
+        Matrix4f m=new Matrix4f(chunkRenderer.getMvp());
+        m.translate(chunkRenderer.getPosition());
+        FrustumIntersection fi = new FrustumIntersection(m);
+        return !(fi.testPoint(xf, yf, zf) || fi.testPoint(xf + CHUNK_SIZE, yf + CHUNK_SIZE, zf + CHUNK_SIZE));
+//        return frustumPlanes.culledXY(xf, yf, zf, xf + CHUNK_SIZE, yf + CHUNK_SIZE, zf + CHUNK_SIZE);
+    }
+
+    /**
+     * Determine whether the given chunk does <i>not</i> intersect the view frustum.
+     */
+    public boolean chunkNotInFrustum(ChunkCoo coo) {
+//        WorldCoo coo111=new WorldCoo(renderedChunk.getWCoo());
+        float xf = (coo.getX() * CHUNK_SIZE) - (float) floor(position.x);
+        float yf = (coo.getY() * CHUNK_SIZE) - (float) floor(position.y);
+        float zf = (coo.getZ() * CHUNK_SIZE) - (float) floor(position.z);
+        Matrix4f m=new Matrix4f(chunkRenderer.getMvp());
+        m.translate(chunkRenderer.getPosition());
+        FrustumIntersection fi = new FrustumIntersection(m);
+        return !(fi.testPoint(xf, yf, zf) || fi.testPoint(xf + CHUNK_SIZE, yf + CHUNK_SIZE, zf + CHUNK_SIZE));
+//        return frustumPlanes.culledXY(xf, yf, zf, xf + CHUNK_SIZE, yf + CHUNK_SIZE, zf + CHUNK_SIZE);
     }
 
     public RenderedChunk getIfExists(ChunkCoo coo) {
@@ -216,25 +239,31 @@ public class RenderedWorldArea {
     }
 
     private boolean ensureChunkIfVisible(ChunkCoo coo) {
-//        System.out.println("ensure render chunk "+coo);
         if (mapByCoo.containsKey(coo)) {
             return false;
         }
-        if (!ChunkDistance.chunkInRenderDistance(position, coo)) {
+        if (chunkNotInFrustum(coo)) {
+//            System.out.println("chunkNotInFrustum " + coo);
             return false;
         }
 
+        if (!ChunkDistance.chunkInRenderDistance(position, coo)) {
+            return false;
+        }
         Chunk c = worldMap.getChunkManager().getChunk(coo);
         RenderedChunk rc = renderedChunkCreator.create(c);
-        renderedChunkMesher.meshChunkFacesAndWriteToBuffers(rc);
         mapByCoo.set(coo, rc);
         frontierChunks.add(rc);
         allRenderedChunks.add(rc);
-        ChunkNeighborSupplier.ensureNeighbor(c);
-        renderedChunkMesher.meshChunkFacesAndWriteToBuffers(rc);
-        if (GameProperties.DEBUG2) {
-            System.out.println("New frontier neighbor chunk is in view: " + rc);
-        }
+//        executorService.submit(() -> {
+
+//            renderedChunkMesher.meshChunkFacesAndWriteToBuffers(rc);
+//            ChunkNeighborSupplier.ensureNeighbor(c);
+            renderedChunkMesher.meshChunkFacesAndWriteToBuffers(rc);
+            if (GameProperties.DEBUG2) {
+                System.out.println("New frontier neighbor chunk is in view: " + rc);
+            }
+//        });
         return true;
     }
 
@@ -263,12 +292,12 @@ public class RenderedWorldArea {
             inFrustrum = 0;
             for (RenderedChunk c : allChunk) {
 //                if(Math.random()>0.1f){continue;}
-                if (!c.ready || chunkNotInFrustum(c)) {
+                if (!c.ready || chunkNotInFrustum(c.getWCoo())) {
                     c.inFrustrum = false;
                     continue;
                 }
                 c.inFrustrum = true;
-                c.isVisible  = false;
+                c.isVisible  = true;
                 inFrustrum++;
             }
             wcv.assign(position);

@@ -153,7 +153,8 @@ public class VoxelField implements Serializable {
 
     private transient int solidBlockCount;
 
-    private transient long lastUpdateTime;
+    private transient long    lastUpdateTime;
+//    private transient boolean bitMasksIsOutOfDate;
 
     /**
      * The number of set/active non-zero voxels. This value can be used to get a (very) rough estimate
@@ -180,7 +181,7 @@ public class VoxelField implements Serializable {
     public int[] getCopyOfGluedFaceField() {
         int[] res = new int[MESH_DATA_ARRAY_SIZE];
 //        if (bitMasksIsOutOfDate) {
-        recalcAllBitMask();
+//            recalcAllBitMask();
 //        }
         System.arraycopy(meshingDataField, 0, res, 0, MESH_DATA_ARRAY_SIZE);
         return res;

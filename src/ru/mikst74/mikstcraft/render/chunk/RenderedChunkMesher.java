@@ -38,7 +38,7 @@ public class RenderedChunkMesher {
     public long meshChunkFacesAndWriteToBuffers(RenderedChunk renderedChunk) {
 
         VoxelField vf = renderedChunk.getChunk().getVoxelField();
-
+vf.recalcAllBitMask();
         if (GameProperties.DEBUG2) {
             System.out.println("meshChunkFacesAndWriteToBuffers: " + renderedChunk + " ");
         }

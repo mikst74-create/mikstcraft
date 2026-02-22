@@ -49,10 +49,10 @@ public class ChunkDistance {
     }
 
     public static boolean chunkInRenderDistance(Vector3f pos, ChunkCoo coo) {
-        if (coo.getY() == 0 && coo.getX() == 0 && coo.getZ() == 0) {
+//        if (coo.getY() >= -1 && coo.getY() < 2) {
             return distToChunk(pos, coo) < GameProperties.MAX_RENDER_DISTANCE_METERS2;
-        }
-        return false;
+//        }
+//        return false;
     }
 
 }

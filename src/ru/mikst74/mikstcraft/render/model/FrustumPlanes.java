@@ -1,5 +1,7 @@
 package ru.mikst74.mikstcraft.render.model;
 
+import org.joml.FrustumIntersection;
+
 public class FrustumPlanes {
     public float nxX, nxY, nxZ, nxW, pxX, pxY, pxZ, pxW, nyX, nyY, nyZ, nyW, pyX, pyY, pyZ, pyW;
     /**
@@ -8,6 +10,7 @@ public class FrustumPlanes {
      * <p>
      * We don't test for near/far planes.
      */
+    FrustumIntersection fi;
     public boolean culledXY(float minX, float minY, float minZ, float maxX, float maxY, float maxZ) {
         return nxX * (nxX < 0 ? minX : maxX) + nxY * (nxY < 0 ? minY : maxY) + nxZ * (nxZ < 0 ? minZ : maxZ) < -nxW
                 || pxX * (pxX < 0 ? minX : maxX) + pxY * (pxY < 0 ? minY : maxY) + pxZ * (pxZ < 0 ? minZ : maxZ) < -pxW

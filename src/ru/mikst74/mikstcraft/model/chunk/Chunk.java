@@ -9,6 +9,7 @@ import ru.mikst74.mikstcraft.model.coo.VoxelCoo;
 import ru.mikst74.mikstcraft.model.coo.WorldCoo;
 
 import java.io.Serializable;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static ru.mikst74.mikstcraft.model.coo.WCVConverter.staticWCV;
 
@@ -17,6 +18,7 @@ import static ru.mikst74.mikstcraft.model.coo.WCVConverter.staticWCV;
  * Chuck is a cube 16x16x16
  */
 public class Chunk implements Serializable {
+    public static AtomicInteger chunks=new AtomicInteger(0);
     @Getter
     public final           ChunkCoo coo;
     @Getter
@@ -31,7 +33,7 @@ public class Chunk implements Serializable {
 
 
     public Chunk(ChunkCoo coo) {
-        System.out.println("New chunk created " + coo);
+        System.out.println("New chunk created " + coo + ", total created "+chunks.getAndIncrement());
         this.coo = new ChunkCoo(coo);
         int shift = staticWCV.getV().getSideShift();
         wCoo       = new WorldCoo(coo.getX() << shift, coo.getY() << shift, coo.getZ() << shift);

@@ -34,10 +34,10 @@ import static ru.mikst74.mikstcraft.util.time.Profiler.printProfile;
 public class Starter {
     private static final WorldMapGenerator MAP_GENERATOR =
 //    new FullEgdesTerrain3DGenerator();
-    new RealWorldTerrain3DGenerator();
+//    new RealWorldTerrain3DGenerator();
 //    new OnlyEgdesTerrain3DGenerator();
 //    new WallXTerrain3DGenerator();
-//            new FlatTerrain3DGenerator();
+            new FlatTerrain3DGenerator();
     //                new NoiseTerrain3DGenerator();;
     private ThreadManager threadManager;
     public  GameInstance  gameInstance;

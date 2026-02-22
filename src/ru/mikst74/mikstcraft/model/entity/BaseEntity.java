@@ -26,7 +26,7 @@ public class BaseEntity {
     public static final  float                FRACTION_STOP           = 0.97f;
     private static final float                ONE_VELOCITY_PER_SECOND = (1 / GameTick.TICKS_PER_SECOND);
     public static final  Vector3f             UP_VECTOR               = new Vector3f(0, 1, 0);
-    private static final float                GRAVITY                 = 10f;
+    private static final float                GRAVITY                 =  10f;
     private static final float                JUMP_VELOCITY           = 7f;
     protected final      CommunicationManager communicationManager;
 
